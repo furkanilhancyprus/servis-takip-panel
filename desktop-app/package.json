@@ -1,0 +1,77 @@
+{
+  "name": "servis-takip-panel-desktop",
+  "version": "1.0.0",
+  "description": "Servis Takip Panel - Masaüstü Uygulaması",
+  "main": "main.js",
+  "author": {
+    "name": "Furkan İlhan",
+    "email": "furkanilhancyprus@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64",
+    "dist:local": "electron-builder --win --x64 -c.productName=\"Servis Takip Panel Lokal\" -c.win.artifactName=\"ServisTakipPanel-Lokal-Lifetime-${version}-Kurulum.${ext}\" -c.extraMetadata.name=\"servis-takip-panel-lokal\"",
+    "dist:portable": "electron-builder --win portable --x64"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.furkan.servistakippanel",
+    "productName": "Servis Takip Panel",
+    "copyright": "Copyright © 2024 Furkan İlhan",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/php",
+        "to": "php",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/www",
+        "to": "www",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "ServisTakipPanel-${version}-Kurulum.${ext}",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Servis Takip Panel",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "license": "build/lisans.txt",
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
+    }
+  }
+}

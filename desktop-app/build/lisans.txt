@@ -1,0 +1,17 @@
+SERVIS TAKIP PANEL - KULLANIM KOSULLARI
+
+Bu yazilim Furkan Ilhan tarafindan gelistirilmistir.
+Ticari yazilimdir. Izinsiz kopyalanamaz, dagitulamaz ve alt lisans verilemez.
+
+HESAP VE KULLANIM
+SaaS masaustu surum kullanici e-posta ve sifresi ile calisir. Internet yokken yerel calisabilir; internet baglantisi geldiginde web hesabi ile senkronize edilir.
+Lokal Lifetime surum sadece kuruldugu bilgisayarda yerel veritabani ile calisir; web panel, mobil uygulama ve bulut senkronizasyon dahil degildir.
+
+LISANS KURALLARI
+- Hesap bilgileri kullaniciya ozeldir ve ucuncu kisilerle paylasilamaz.
+- Yazilimi kopyalamak, dagitmak veya tersine muhendislik yapmak yasaktir.
+
+GARANTI REDDI
+Bu yazilim "oldugu gibi" sunulmaktadir. Hicbir garanti verilmemektedir.
+
+Iletisim: furkanilhancyprus@gmail.com

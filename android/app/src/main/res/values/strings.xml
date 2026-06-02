@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Servis Takip Panel</string>
+    <string name="error_title">Bağlantı kurulamadı</string>
+    <string name="error_message">Web paneline ulaşılamıyor. İnternet bağlantınızı kontrol edip tekrar deneyin.</string>
+    <string name="retry">Tekrar dene</string>
+</resources>

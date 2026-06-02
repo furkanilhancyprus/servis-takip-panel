@@ -1,0 +1,46 @@
+# ─── Güvenlik ──────────────────────────────────────────────────────────────
+Options -Indexes
+ServerSignature Off
+
+# PHP ayarları (shared hosting uyumlu)
+php_value session.cookie_httponly 1
+php_value session.use_strict_mode 1
+php_flag display_errors Off
+php_value error_reporting 0
+
+# Hassas dosyalara erişimi engelle
+<FilesMatch "\.(db|sqlite|sqlite3|log|env|json|lock|sh|bak)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(composer|package|\.env)">
+    Require all denied
+</FilesMatch>
+
+# Güvenlik başlıkları
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ─── URL Yönlendirme ────────────────────────────────────────────────────────
+RewriteEngine On
+
+# HTTPS yönlendirme (hosting'de aktifse)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# API klasörünü direkt çağır
+RewriteRule ^api/(.+)$ api/$1 [L]
+
+# Giriş/Kayıt/Çıkış/Fatura sayfaları direkt erişim
+RewriteRule ^(landing|giris|kayit|cikis|fiyat_teklifi)\.php$ - [L]
+
+# Statik dosyalar
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Her şeyi index.php'ye yönlendir
+RewriteRule ^([a-z_]+)/?$ index.php?page=$1 [QSA,L]
+RewriteRule ^$ landing.php [L]

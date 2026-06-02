@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    width: 420px; height: 280px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'Segoe UI', sans-serif;
+    color: #e2e8f0;
+    -webkit-app-region: drag;
+    border-radius: 16px;
+    overflow: hidden;
+}
+.logo { font-size: 52px; margin-bottom: 16px; }
+h1 { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+p  { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+.bar-wrap {
+    width: 220px; height: 4px;
+    background: #1e293b; border-radius: 4px; overflow: hidden;
+}
+.bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    border-radius: 4px;
+    animation: load 2.5s ease-in-out forwards;
+}
+@keyframes load {
+    0%   { width: 0% }
+    40%  { width: 60% }
+    80%  { width: 85% }
+    100% { width: 98% }
+}
+.alt { font-size: 11px; color: #334155; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="logo">💧</div>
+<h1>Servis Takip Panel</h1>
+<p>Müşteri & Bakım Yönetim Sistemi</p>
+<div class="bar-wrap"><div class="bar"></div></div>
+<div class="alt">Başlatılıyor...</div>
+</body>
+</html>

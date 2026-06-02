@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "\.(exe|apk)$">
+    Header set Content-Disposition attachment
+</FilesMatch>

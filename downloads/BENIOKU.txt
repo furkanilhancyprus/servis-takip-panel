@@ -1,0 +1,4 @@
+Bu klasöre şu dosyaları yükleyin:
+- ServisTakipPanel-Kurulum.exe → Windows kurulum dosyasi
+- ServisTakipPanel.apk         → Android imzali APK
+- ServisTakipPanel-debug.apk   → Android test APK
