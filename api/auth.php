@@ -39,11 +39,24 @@ function hesap_kullanilabilir(array $kullanici): bool {
         || strtotime((string)$bitis) >= strtotime(date('Y-m-d'));
 }
 
-function create_sync_token(Database $db, int $firmaId, string $deviceName = '', string $deviceId = ''): string {
+function request_ip(): string {
+    $candidates = [
+        $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '',
+        $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '',
+        $_SERVER['REMOTE_ADDR'] ?? '',
+    ];
+    foreach ($candidates as $ip) {
+        $ip = trim(explode(',', (string)$ip)[0]);
+        if ($ip !== '') return $ip;
+    }
+    return '';
+}
+
+function create_sync_token(Database $db, int $firmaId, string $deviceName = '', string $deviceId = '', string $deviceType = ''): string {
     $token = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
     $db->execute(
-        "INSERT INTO sync_tokens (firma_id, token_hash, device_name, device_id) VALUES (?, ?, ?, ?)",
-        [$firmaId, hash('sha256', $token), $deviceName, $deviceId]
+        "INSERT INTO sync_tokens (firma_id, token_hash, device_name, device_id, device_type, ip_address, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        [$firmaId, hash('sha256', $token), $deviceName, $deviceId, $deviceType, request_ip(), $_SERVER['HTTP_USER_AGENT'] ?? '']
     );
     return $token;
 }
@@ -156,7 +169,7 @@ if ($action === 'desktop_login' || $action === 'mobile_login') {
         json_err('Hesabiniz pasif veya aboneliginiz sona ermistir.', 403);
     }
 
-    $token = create_sync_token($db, (int)$kullanici['id'], $deviceName, $deviceId);
+    $token = create_sync_token($db, (int)$kullanici['id'], $deviceName, $deviceId, $action === 'mobile_login' ? 'mobile' : 'desktop');
     json_ok([
         'token' => $token,
         'firma_id' => (int)$kullanici['id'],

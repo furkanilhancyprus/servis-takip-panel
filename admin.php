@@ -33,7 +33,7 @@ function admin_plan_label(string $plan): string {
     ][$plan] ?? ucfirst($plan);
 }
 
-function admin_money(float|int|string|null $value): string {
+function admin_money($value): string {
     return number_format((float)$value, 2, ',', '.') . ' ₺';
 }
 
@@ -117,6 +117,24 @@ if ($action === 'update_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         [$paket, $abonelikBitis ?: null, $aktif, $id]
     );
     admin_redirect('Kullanıcı güncellendi.');
+}
+
+if ($action === 'revoke_device' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_SESSION['admin_id'])) {
+        admin_redirect('Önce admin girişi yapın.', 'error');
+    }
+    admin_require_csrf();
+    $firmaId = (int)($_POST['firma_id'] ?? 0);
+    $tokenId = (int)($_POST['token_id'] ?? 0);
+    if ($firmaId <= 0 || $tokenId <= 0) {
+        admin_redirect('Geçersiz cihaz işlemi.', 'error');
+    }
+    $db->query(
+        "UPDATE sync_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND firma_id=?",
+        [$tokenId, $firmaId]
+    );
+    header('Location: admin.php?firma_id=' . $firmaId);
+    exit;
 }
 
 if ($action === 'support_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -372,6 +390,8 @@ if ($isLogged) {
                 'satis' => (int)$db->fetchColumn("SELECT COUNT(*) FROM satislar WHERE firma_id=? AND deleted_at IS NULL", [$selectedFirmaId]),
                 'tahsilat' => (float)$db->fetchColumn("SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE firma_id=? AND deleted_at IS NULL", [$selectedFirmaId]),
                 'cihaz' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE firma_id=? AND revoked_at IS NULL", [$selectedFirmaId]),
+                'mobil_cihaz' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE firma_id=? AND revoked_at IS NULL AND device_type='mobile'", [$selectedFirmaId]),
+                'masaustu_cihaz' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE firma_id=? AND revoked_at IS NULL AND device_type='desktop'", [$selectedFirmaId]),
                 'servis_bakiye' => (float)$db->fetchColumn("SELECT COALESCE(SUM(toplam_tutar - odenen_tutar),0) FROM servisler WHERE firma_id=? AND deleted_at IS NULL AND odeme_durumu!='odendi'", [$selectedFirmaId]),
                 'satis_bakiye' => (float)$db->fetchColumn("SELECT COALESCE(SUM(toplam_tutar - odenen_tutar),0) FROM satislar WHERE firma_id=? AND deleted_at IS NULL AND odeme_durumu!='odendi'", [$selectedFirmaId]),
                 'geciken_taksit' => (int)$db->fetchColumn("SELECT COUNT(*) FROM taksitler WHERE firma_id=? AND deleted_at IS NULL AND odendi=0 AND vade_tarihi < date('now')", [$selectedFirmaId]),
@@ -401,7 +421,7 @@ if ($isLogged) {
             ", $customerParams);
 
             $firmDevices = $db->fetchAll("
-                SELECT device_name, device_id, created_at, last_seen_at
+                SELECT id, device_name, device_id, device_type, ip_address, user_agent, created_at, last_seen_at
                 FROM sync_tokens
                 WHERE firma_id=? AND revoked_at IS NULL
                 ORDER BY COALESCE(last_seen_at, created_at) DESC
@@ -977,15 +997,41 @@ if ($isLogged) {
 
                 <div class="rounded-xl border border-slate-200 overflow-hidden">
                     <div class="px-4 py-2 bg-slate-50 font-bold text-sm">Cihaz ve Senkron</div>
+                    <div class="px-4 py-3 border-b border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                        <div class="rounded-lg bg-slate-50 py-2"><div class="font-extrabold text-slate-800"><?= (int)($firmSummary['cihaz'] ?? 0) ?></div><div class="text-slate-400">Toplam</div></div>
+                        <div class="rounded-lg bg-blue-50 py-2"><div class="font-extrabold text-blue-700"><?= (int)($firmSummary['mobil_cihaz'] ?? 0) ?></div><div class="text-blue-500">Mobil</div></div>
+                        <div class="rounded-lg bg-emerald-50 py-2"><div class="font-extrabold text-emerald-700"><?= (int)($firmSummary['masaustu_cihaz'] ?? 0) ?></div><div class="text-emerald-500">Masaüstü</div></div>
+                    </div>
                     <div class="divide-y divide-slate-100 max-h-72 overflow-y-auto">
                         <?php foreach ($firmDevices as $d): ?>
                             <div class="px-4 py-3 text-sm">
-                                <div class="font-semibold"><?= htmlspecialchars($d['device_name'] ?: 'Adsız cihaz') ?></div>
-                                <div class="text-xs text-slate-500">Cihaz ID: <?= htmlspecialchars($d['device_id'] ?: '-') ?></div>
+                                <?php
+                                    $deviceType = $d['device_type'] ?: 'unknown';
+                                    $typeLabel = $deviceType === 'mobile' ? 'Mobil' : ($deviceType === 'desktop' ? 'Masaüstü' : 'Bilinmiyor');
+                                    $typeClass = $deviceType === 'mobile' ? 'bg-blue-50 text-blue-700' : ($deviceType === 'desktop' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600');
+                                ?>
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold"><?= htmlspecialchars($d['device_name'] ?: 'Adsız cihaz') ?></div>
+                                        <div class="text-xs text-slate-500">Cihaz ID: <?= htmlspecialchars($d['device_id'] ?: '-') ?></div>
+                                    </div>
+                                    <span class="text-[11px] font-bold px-2 py-1 rounded-full <?= $typeClass ?>"><?= $typeLabel ?></span>
+                                </div>
                                 <div class="text-xs text-slate-400 mt-1">
                                     Oluşturma: <?= htmlspecialchars($d['created_at']) ?> ·
                                     Son bağlantı: <?= htmlspecialchars($d['last_seen_at'] ?: 'Henüz yok') ?>
                                 </div>
+                                <div class="text-xs text-slate-400 mt-1">IP: <?= htmlspecialchars($d['ip_address'] ?: '-') ?></div>
+                                <?php if (!empty($d['user_agent'])): ?>
+                                    <div class="text-[11px] text-slate-400 mt-1 truncate" title="<?= htmlspecialchars($d['user_agent']) ?>"><?= htmlspecialchars($d['user_agent']) ?></div>
+                                <?php endif; ?>
+                                <form method="post" class="mt-2" onsubmit="return confirm('Bu cihazın senkron erişimi iptal edilsin mi?')">
+                                    <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
+                                    <input type="hidden" name="action" value="revoke_device">
+                                    <input type="hidden" name="firma_id" value="<?= (int)$selectedFirma['id'] ?>">
+                                    <input type="hidden" name="token_id" value="<?= (int)$d['id'] ?>">
+                                    <button class="text-xs font-semibold text-red-600 hover:text-red-700">Cihaz erişimini iptal et</button>
+                                </form>
                             </div>
                         <?php endforeach; ?>
                         <?php if (!$firmDevices): ?><div class="px-4 py-6 text-center text-slate-400 text-sm">Bağlı cihaz yok.</div><?php endif; ?>

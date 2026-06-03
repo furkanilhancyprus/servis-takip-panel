@@ -43,7 +43,12 @@ if (!isset($_SESSION['firma_id'])) {
             $_SESSION['firma_adi'] = $tokenRow['firma_adi'];
             $_SESSION['ad_soyad'] = $tokenRow['ad_soyad'];
             $_SESSION['email'] = $tokenRow['email'];
-            $dbForAuth->query("UPDATE sync_tokens SET last_seen_at=CURRENT_TIMESTAMP WHERE token_hash=?", [$tokenHash]);
+            $ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? ''));
+            $ip = trim(explode(',', (string)$ip)[0]);
+            $dbForAuth->query(
+                "UPDATE sync_tokens SET last_seen_at=CURRENT_TIMESTAMP, ip_address=?, user_agent=? WHERE token_hash=?",
+                [$ip, $_SERVER['HTTP_USER_AGENT'] ?? '', $tokenHash]
+            );
         }
     }
 

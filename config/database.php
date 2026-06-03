@@ -423,12 +423,26 @@ class Database {
                 token_hash TEXT UNIQUE NOT NULL,
                 device_name TEXT,
                 device_id TEXT,
+                device_type TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_seen_at DATETIME,
                 revoked_at DATETIME,
                 FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
             );
         ");
+
+        $syncTokenCols = array_column($this->pdo->query("PRAGMA table_info(sync_tokens)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        foreach ([
+            'device_type' => "ALTER TABLE sync_tokens ADD COLUMN device_type TEXT",
+            'ip_address' => "ALTER TABLE sync_tokens ADD COLUMN ip_address TEXT",
+            'user_agent' => "ALTER TABLE sync_tokens ADD COLUMN user_agent TEXT",
+        ] as $column => $sql) {
+            if (!in_array($column, $syncTokenCols, true)) {
+                $this->pdo->exec($sql);
+            }
+        }
 
         $syncStateCols = array_column($this->pdo->query("PRAGMA table_info(sync_state)")->fetchAll(PDO::FETCH_ASSOC), 'name');
         if (!in_array('token', $syncStateCols, true)) {
