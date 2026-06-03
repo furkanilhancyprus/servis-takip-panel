@@ -12,19 +12,21 @@ import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CursorAdapter;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
-import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,7 +48,7 @@ public class MainActivity extends Activity {
     private ListView list;
     private TextView title;
     private TextView subtitle;
-    private SimpleCursorAdapter adapter;
+    private CursorAdapter adapter;
     private Cursor listCursor;
     private String module = "musteri";
     private static final int LOCATION_PERMISSION_REQUEST = 41;
@@ -63,6 +65,10 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
         setContentView(root);
+        if (Build.VERSION.SDK_INT >= 21) {
+            getWindow().setStatusBarColor(NAVY);
+            getWindow().setNavigationBarColor(Color.WHITE);
+        }
         if (db.getSetting("token").isEmpty()) showLogin(); else {
             showHome();
             doSync(false);
@@ -213,18 +219,22 @@ public class MainActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView badge = label("SP", 16, Color.WHITE, Typeface.BOLD);
+        TextView badge = label("✓", 18, Color.WHITE, Typeface.BOLD);
         badge.setGravity(Gravity.CENTER);
-        badge.setBackgroundResource(R.drawable.logo_badge);
-        top.addView(badge, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        badge.setBackground(round(BLUE, dp(14), Color.argb(90, 255, 255, 255)));
+        top.addView(badge, new LinearLayout.LayoutParams(dp(46), dp(46)));
         LinearLayout names = new LinearLayout(this);
         names.setOrientation(LinearLayout.VERTICAL);
         names.setPadding(dp(12), 0, 0, 0);
-        title = label(moduleTitle(), 22, Color.WHITE, Typeface.BOLD);
-        subtitle = label(headerStatusText(), 12, Color.rgb(203, 213, 225), Typeface.NORMAL);
+        title = label(moduleTitle(), 23, Color.WHITE, Typeface.BOLD);
+        subtitle = label(headerStatusText(), 12, Color.rgb(219, 234, 254), Typeface.NORMAL);
         names.addView(title);
         names.addView(subtitle);
         top.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView cloud = label(db.pendingCount() > 0 ? "Senkron" : "Güncel", 12, Color.WHITE, Typeface.BOLD);
+        cloud.setGravity(Gravity.CENTER);
+        cloud.setBackground(round(Color.argb(40, 255, 255, 255), dp(14), Color.argb(95, 255, 255, 255)));
+        top.addView(cloud, new LinearLayout.LayoutParams(dp(78), dp(32)));
         header.addView(top);
         header.addView(summaryStrip(), new LinearLayout.LayoutParams(-1, -2));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
@@ -233,10 +243,12 @@ public class MainActivity extends Activity {
         root.addView(actionBar(), new LinearLayout.LayoutParams(-1, dp(66)));
 
         list = new ListView(this);
-        list.setDividerHeight(1);
-        list.setDivider(new android.graphics.drawable.ColorDrawable(BORDER));
-        list.setPadding(dp(8), dp(4), dp(8), dp(8));
+        list.setDividerHeight(0);
+        list.setDivider(null);
+        list.setSelector(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        list.setPadding(dp(12), dp(8), dp(12), dp(12));
         list.setClipToPadding(false);
+        list.setBackgroundColor(BG);
         root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
         refreshList();
         list.setOnItemClickListener((parent, view, position, id) -> showDetails(id));
@@ -290,13 +302,18 @@ public class MainActivity extends Activity {
 
     private View actionBar() {
         LinearLayout actions = new LinearLayout(this);
-        actions.setPadding(dp(10), dp(8), dp(10), dp(6));
-        Button add = primaryButton("+ Ekle");
+        actions.setPadding(dp(12), dp(8), dp(12), dp(8));
+        actions.setBackgroundColor(BG);
+        Button add = primaryButton("+ Yeni Kayıt");
         Button sync = outlineButton("Senkron");
-        Button logout = outlineButton("Çıkış");
-        actions.addView(add, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actions.addView(sync, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actions.addView(logout, new LinearLayout.LayoutParams(0, dp(48), 1));
+        Button logout = ghostButton("Çıkış");
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(0, dp(50), 1.45f);
+        addLp.setMargins(0, 0, dp(7), 0);
+        LinearLayout.LayoutParams syncLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
+        syncLp.setMargins(dp(0), 0, dp(7), 0);
+        actions.addView(add, addLp);
+        actions.addView(sync, syncLp);
+        actions.addView(logout, new LinearLayout.LayoutParams(0, dp(50), .8f));
         add.setOnClickListener(v -> showAddDialog());
         sync.setOnClickListener(v -> doSync());
         logout.setOnClickListener(v -> {
@@ -309,33 +326,7 @@ public class MainActivity extends Activity {
     private void refreshList() {
         if (listCursor != null) listCursor.close();
         listCursor = db.visible(module);
-        adapter = new SimpleCursorAdapter(
-            this,
-            android.R.layout.simple_list_item_2,
-            listCursor,
-            new String[]{"title", "subtitle"},
-            new int[]{android.R.id.text1, android.R.id.text2},
-            0
-        );
-        adapter.setViewBinder((view, cursor, columnIndex) -> {
-            if (view.getId() == android.R.id.text2) {
-                TextView tv = (TextView)view;
-                tv.setTextColor(MUTED);
-                tv.setTextSize(12);
-                String base = cursor.getString(cursor.getColumnIndexOrThrow("subtitle"));
-                String synced = cursor.getString(cursor.getColumnIndexOrThrow("synced_at"));
-                tv.setText(base + (synced == null ? "  - bekleyen senkron" : "  - senkronize"));
-                return true;
-            }
-            if (view.getId() == android.R.id.text1) {
-                TextView tv = (TextView)view;
-                tv.setTextColor(TEXT);
-                tv.setTextSize(15);
-                tv.setTypeface(null, Typeface.BOLD);
-                return true;
-            }
-            return false;
-        });
+        adapter = new RecordAdapter(this, listCursor);
         list.setAdapter(adapter);
         if (title != null) title.setText(moduleTitle());
         if (subtitle != null) subtitle.setText(headerStatusText());
@@ -736,6 +727,14 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    private Button ghostButton(String text) {
+        Button b = button(text);
+        b.setTextColor(MUTED);
+        b.setTypeface(null, Typeface.BOLD);
+        b.setBackground(round(Color.rgb(241, 245, 249), dp(10), BORDER));
+        return b;
+    }
+
     private Button tabButton(String text, boolean active) {
         Button b = button(text);
         b.setTextColor(active ? Color.WHITE : TEXT);
@@ -761,6 +760,90 @@ public class MainActivity extends Activity {
         lp.setMargins(dp(3), 0, dp(3), 0);
         v.setLayoutParams(lp);
         return v;
+    }
+
+    private class RecordAdapter extends CursorAdapter {
+        RecordAdapter(Context context, Cursor cursor) {
+            super(context, cursor, 0);
+        }
+
+        @Override
+        public View newView(Context context, Cursor cursor, ViewGroup parent) {
+            LinearLayout outer = new LinearLayout(context);
+            outer.setOrientation(LinearLayout.VERTICAL);
+            outer.setPadding(0, 0, 0, dp(10));
+
+            LinearLayout card = new LinearLayout(context);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(14), dp(14), dp(14), dp(14));
+            card.setBackground(round(Color.WHITE, dp(16), BORDER));
+            card.setElevation(dp(2));
+            outer.addView(card, new LinearLayout.LayoutParams(-1, -2));
+
+            TextView icon = label("", 18, Color.WHITE, Typeface.BOLD);
+            icon.setId(1001);
+            icon.setGravity(Gravity.CENTER);
+            card.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+
+            LinearLayout texts = new LinearLayout(context);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            texts.setPadding(dp(12), 0, dp(8), 0);
+            TextView rowTitle = label("", 15, TEXT, Typeface.BOLD);
+            rowTitle.setId(1002);
+            TextView rowSub = label("", 12, MUTED, Typeface.NORMAL);
+            rowSub.setId(1003);
+            rowSub.setSingleLine(false);
+            rowSub.setPadding(0, dp(3), 0, 0);
+            texts.addView(rowTitle, new LinearLayout.LayoutParams(-1, -2));
+            texts.addView(rowSub, new LinearLayout.LayoutParams(-1, -2));
+            card.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+
+            TextView badge = label("", 11, Color.WHITE, Typeface.BOLD);
+            badge.setId(1004);
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(dp(9), 0, dp(9), 0);
+            card.addView(badge, new LinearLayout.LayoutParams(-2, dp(28)));
+            return outer;
+        }
+
+        @Override
+        public void bindView(View view, Context context, Cursor cursor) {
+            TextView icon = view.findViewById(1001);
+            TextView rowTitle = view.findViewById(1002);
+            TextView rowSub = view.findViewById(1003);
+            TextView badge = view.findViewById(1004);
+            String synced = cursor.getString(cursor.getColumnIndexOrThrow("synced_at"));
+            String subtitle = cursor.getString(cursor.getColumnIndexOrThrow("subtitle"));
+            rowTitle.setText(cursor.getString(cursor.getColumnIndexOrThrow("title")));
+            rowSub.setText(subtitle == null || subtitle.isEmpty() ? "Detay için dokunun" : subtitle);
+            icon.setText(moduleIcon());
+            icon.setBackground(round(moduleColor(), dp(14), moduleColor()));
+            badge.setText(synced == null ? "Bekliyor" : "OK");
+            badge.setBackground(round(synced == null ? ORANGE : GREEN, dp(14), synced == null ? ORANGE : GREEN));
+        }
+    }
+
+    private String moduleIcon() {
+        switch (module) {
+            case "stok": return "S";
+            case "servis": return "R";
+            case "satis": return "₺";
+            case "tahsilat": return "T";
+            case "bakim": return "B";
+            default: return "M";
+        }
+    }
+
+    private int moduleColor() {
+        switch (module) {
+            case "stok": return Color.rgb(14, 165, 233);
+            case "servis": return BLUE;
+            case "satis": return Color.rgb(124, 58, 237);
+            case "tahsilat": return GREEN;
+            case "bakim": return ORANGE;
+            default: return NAVY;
+        }
     }
 
     private GradientDrawable round(int fill, int radius, int stroke) {
