@@ -254,14 +254,27 @@ class LocalDb extends SQLiteOpenHelper {
         int total = 0;
         String[] tables = {"musteriler", "parcalar", "servisler", "satislar", "tahsilatlar", "periyodik_bakimlar"};
         for (String table : tables) {
-            Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM " + table + " WHERE synced_at IS NULL", null);
-            try {
-                if (c.moveToFirst()) total += c.getInt(0);
-            } finally {
-                c.close();
-            }
+            total += pendingCount(table);
         }
         return total;
+    }
+
+    int pendingCount(String table) {
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM " + table + " WHERE synced_at IS NULL", null);
+        try {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        } finally {
+            c.close();
+        }
+    }
+
+    int deletedPendingCount(String table) {
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM " + table + " WHERE synced_at IS NULL AND deleted_at IS NOT NULL", null);
+        try {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        } finally {
+            c.close();
+        }
     }
 
     int visibleCount(String module) {

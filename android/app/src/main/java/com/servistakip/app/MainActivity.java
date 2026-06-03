@@ -218,6 +218,9 @@ public class MainActivity extends Activity {
         root.removeAllViews();
         root.setGravity(Gravity.NO_GRAVITY);
         root.setPadding(0, 0, 0, 0);
+        list = null;
+        emptyState = null;
+        adapter = null;
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
@@ -248,6 +251,12 @@ public class MainActivity extends Activity {
 
         if ("dashboard".equals(module)) {
             root.addView(dashboardView(), new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(bottomNav(), new LinearLayout.LayoutParams(-1, dp(72)));
+            return;
+        }
+
+        if ("sync".equals(module)) {
+            root.addView(syncQueueView(), new LinearLayout.LayoutParams(-1, 0, 1));
             root.addView(bottomNav(), new LinearLayout.LayoutParams(-1, dp(72)));
             return;
         }
@@ -355,8 +364,72 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(118), 1);
         lp.setMargins(dp(4), 0, dp(4), 0);
         v.setLayoutParams(lp);
-        if (!"sync".equals(target)) v.setOnClickListener(x -> { module = target; searchQuery = ""; showHome(); });
+        v.setOnClickListener(x -> { module = target; searchQuery = ""; showHome(); });
         return v;
+    }
+
+    private View syncQueueView() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14), dp(14), dp(14), dp(18));
+        scroll.addView(page);
+
+        page.addView(label("Offline kayit kuyrugu", 18, TEXT, Typeface.BOLD), new LinearLayout.LayoutParams(-1, -2));
+        page.addView(label("Internet geldiginde bu kayitlar otomatik olarak web hesabina aktarilir.", 13, MUTED, Typeface.NORMAL), new LinearLayout.LayoutParams(-1, -2));
+
+        page.addView(syncRow("Musteriler", "musteriler", BLUE, "musteri"));
+        page.addView(syncRow("Stok", "parcalar", Color.rgb(124, 58, 237), "stok"));
+        page.addView(syncRow("Servisler", "servisler", GREEN, "servis"));
+        page.addView(syncRow("Satislar", "satislar", ORANGE, "satis"));
+        page.addView(syncRow("Tahsilatlar", "tahsilatlar", Color.rgb(8, 145, 178), "tahsilat"));
+        page.addView(syncRow("Bakimlar", "periyodik_bakimlar", Color.rgb(190, 24, 93), "bakim"));
+
+        Button syncNow = primaryButton("Simdi senkronize et");
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(-1, dp(54));
+        btnLp.setMargins(0, dp(14), 0, 0);
+        page.addView(syncNow, btnLp);
+        syncNow.setOnClickListener(v -> doSync());
+
+        if (db.pendingCount() == 0) {
+            TextView done = label("Tum kayitlar guncel.", 15, GREEN, Typeface.BOLD);
+            done.setGravity(Gravity.CENTER);
+            done.setBackground(round(Color.rgb(240, 253, 244), dp(14), Color.rgb(187, 247, 208)));
+            LinearLayout.LayoutParams doneLp = new LinearLayout.LayoutParams(-1, dp(64));
+            doneLp.setMargins(0, dp(14), 0, 0);
+            page.addView(done, doneLp);
+        }
+        return scroll;
+    }
+
+    private View syncRow(String titleText, String table, int color, String targetModule) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        row.setBackground(round(Color.WHITE, dp(16), BORDER));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(82));
+        lp.setMargins(0, dp(10), 0, 0);
+        row.setLayoutParams(lp);
+
+        TextView icon = label(String.valueOf(db.pendingCount(table)), 20, Color.WHITE, Typeface.BOLD);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(round(color, dp(14), color));
+        row.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.setPadding(dp(12), 0, 0, 0);
+        int deleted = db.deletedPendingCount(table);
+        texts.addView(label(titleText, 16, TEXT, Typeface.BOLD));
+        texts.addView(label(deleted > 0 ? deleted + " silme islemi dahil" : "Web ile eslesmeyi bekliyor", 12, MUTED, Typeface.NORMAL));
+        row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+
+        TextView go = label("Ac", 13, BLUE, Typeface.BOLD);
+        go.setGravity(Gravity.CENTER);
+        row.addView(go, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        row.setOnClickListener(v -> { module = targetModule; searchQuery = ""; showHome(); });
+        return row;
     }
 
     private void addQuickButton(LinearLayout parent, Button button) {
@@ -462,23 +535,84 @@ public class MainActivity extends Activity {
     }
 
     private void showDetails(long rowId) {
+        if ("musteri".equals(module)) {
+            showCustomerDetailScreen(rowId);
+            return;
+        }
         String name = db.titleByRowId(module, rowId);
         String detail = db.detailByRowId(module, rowId);
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
             .setTitle(name.isEmpty() ? moduleTitle() : name)
             .setMessage(detail.isEmpty() ? "Detay bulunamadi." : detail)
             .setNegativeButton("Kapat", null);
-        if ("musteri".equals(module)) {
-            String[] contact = db.customerContactByRowId(rowId);
-            builder.setNeutralButton("Ara", (d, w) -> openDial(contact[0]));
-            builder.setPositiveButton("Aksiyonlar", (d, w) -> showCustomerActions(rowId));
-        } else {
-            builder.setPositiveButton("Sil", (d, w) -> {
-                db.softDelete(module, rowId);
-                if (list == null) showHome(); else refreshList();
-            });
-        }
+        builder.setPositiveButton("Sil", (d, w) -> {
+            db.softDelete(module, rowId);
+            if (list == null) showHome(); else refreshList();
+        });
         builder.show();
+    }
+
+    private void showCustomerDetailScreen(long rowId) {
+        String name = db.titleByRowId("musteri", rowId);
+        String detail = db.detailByRowId("musteri", rowId);
+        String[] contact = db.customerContactByRowId(rowId);
+
+        root.removeAllViews();
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(16), dp(18), dp(16), dp(14));
+        header.setBackgroundColor(NAVY);
+        TextView back = label("< Musterilere don", 13, Color.rgb(219, 234, 254), Typeface.BOLD);
+        back.setPadding(0, 0, 0, dp(12));
+        back.setOnClickListener(v -> showHome());
+        header.addView(back);
+        header.addView(label(name.isEmpty() ? "Musteri detayi" : name, 24, Color.WHITE, Typeface.BOLD));
+        header.addView(label(contact[0].isEmpty() ? "Telefon kaydi yok" : contact[0], 13, Color.rgb(219, 234, 254), Typeface.NORMAL));
+        root.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14), dp(14), dp(14), dp(20));
+        scroll.addView(page);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setBackground(round(Color.WHITE, dp(16), BORDER));
+        page.addView(card, new LinearLayout.LayoutParams(-1, -2));
+        card.addView(label("Kayit bilgileri", 17, TEXT, Typeface.BOLD));
+        TextView detailText = label(detail.isEmpty() ? "Detay bulunamadi." : detail, 14, TEXT, Typeface.NORMAL);
+        detailText.setPadding(0, dp(10), 0, 0);
+        card.addView(detailText);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(-1, -2);
+        actionLp.setMargins(0, dp(14), 0, 0);
+        page.addView(actions, actionLp);
+        Button call = primaryButton("Telefonla ara");
+        Button whatsapp = outlineButton("WhatsApp ac");
+        Button map = outlineButton("Haritada goster");
+        Button delete = ghostButton("Kaydi sil");
+        addQuickButton(actions, call);
+        addQuickButton(actions, whatsapp);
+        addQuickButton(actions, map);
+        addQuickButton(actions, delete);
+        call.setOnClickListener(v -> openDial(contact[0]));
+        whatsapp.setOnClickListener(v -> openWhatsApp(contact[0]));
+        map.setOnClickListener(v -> openMap(contact[1], contact[2], contact[3]));
+        delete.setOnClickListener(v -> new AlertDialog.Builder(this)
+            .setTitle("Kayit silinsin mi?")
+            .setMessage("Bu musteri offline kuyruga silme islemi olarak eklenir ve senkron sonrasi webden de kaldirilir.")
+            .setNegativeButton("Vazgec", null)
+            .setPositiveButton("Sil", (d, w) -> {
+                db.softDelete("musteri", rowId);
+                showHome();
+            })
+            .show());
+
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     }
 
     private void showCustomerActions(long rowId) {
@@ -869,6 +1003,7 @@ public class MainActivity extends Activity {
             case "dashboard": return "Ana Sayfa";
             case "stok": return "Stok";
             case "servis": return "Servisler";
+            case "sync": return "Senkron Kuyrugu";
             case "satis": return "Satışlar";
             case "tahsilat": return "Tahsilatlar";
             case "bakim": return "Bakım";
@@ -879,6 +1014,11 @@ public class MainActivity extends Activity {
     private String headerStatusText() {
         String firma = db.getSetting("firma_adi");
         String last = db.getSetting("last_sync");
+        if ("sync".equals(module)) {
+            return (firma.isEmpty() ? "Mobil offline mod" : firma) +
+                " - bekleyen: " + db.pendingCount() +
+                (last.isEmpty() ? " - henuz senkron yok" : " - son senkron: " + last);
+        }
         return (firma.isEmpty() ? "Mobil offline mod" : firma) +
             " - " + db.visibleCount(module) + " kayıt" +
             " - bekleyen: " + db.pendingCount() +
