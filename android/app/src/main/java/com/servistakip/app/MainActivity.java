@@ -60,6 +60,9 @@ public class MainActivity extends Activity {
     private String selectedSourceUuid = "";
     private String selectedSourceTip = "";
     private String selectedSourceCustomerUuid = "";
+    private String selectedStockUuid = "";
+    private String selectedStockName = "";
+    private double selectedStockPrice = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -472,7 +475,7 @@ public class MainActivity extends Activity {
         } else {
             builder.setPositiveButton("Sil", (d, w) -> {
                 db.softDelete(module, rowId);
-                refreshList();
+                if (list == null) showHome(); else refreshList();
             });
         }
         builder.show();
@@ -503,7 +506,7 @@ public class MainActivity extends Activity {
             .setNegativeButton("Vazgeç", null)
             .setPositiveButton("Sil", (d, w) -> {
                 db.softDelete(module, rowId);
-                refreshList();
+                if (list == null) showHome(); else refreshList();
             })
             .show();
     }
@@ -515,8 +518,8 @@ public class MainActivity extends Activity {
         }
         switch (module) {
             case "stok": stockDialog(); break;
-            case "servis": serviceDialog(); break;
-            case "satis": saleDialog(); break;
+            case "servis": serviceDialogV2(); break;
+            case "satis": saleDialogV2(); break;
             case "tahsilat": collectionDialog(); break;
             case "bakim": maintenanceDialog(); break;
             default: customerDialog();
@@ -608,6 +611,49 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void serviceDialogV2() {
+        EditText customer = input("Musteri", false), stock = input("Kullanilan urun/parca", false), qty = input("Adet", false), total = input("Tutar", false), note = input("Not", false);
+        customer.setFocusable(false);
+        stock.setFocusable(false);
+        selectedCustomerUuid = "";
+        selectedStockUuid = "";
+        selectedStockName = "";
+        selectedStockPrice = 0;
+        customer.setOnClickListener(v -> pickCustomer(customer));
+        stock.setOnClickListener(v -> pickStock(stock));
+        qty.setInputType(InputType.TYPE_CLASS_NUMBER);
+        total.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        dialog("Servis ekle", form(customer, stock, qty, total, note), () -> {
+            String mu = selectedCustomerUuid.isEmpty() ? db.firstCustomerUuid() : selectedCustomerUuid;
+            int count = number(qty, selectedStockUuid.isEmpty() ? 0 : 1);
+            double amount = money(total);
+            if (amount <= 0 && selectedStockPrice > 0 && count > 0) amount = selectedStockPrice * count;
+            db.addServiceWithStock(mu, "periyodik_bakim", amount, val(note), selectedStockUuid, count, selectedStockName);
+            refreshList();
+        });
+    }
+
+    private void saleDialogV2() {
+        EditText customer = input("Musteri", false), stock = input("Satilan urun", false), qty = input("Adet", false), serial = input("Seri No", false), total = input("Tutar", false), note = input("Not", false);
+        customer.setFocusable(false);
+        stock.setFocusable(false);
+        selectedCustomerUuid = "";
+        selectedStockUuid = "";
+        selectedStockName = "";
+        selectedStockPrice = 0;
+        customer.setOnClickListener(v -> pickCustomer(customer));
+        stock.setOnClickListener(v -> pickStock(stock));
+        qty.setInputType(InputType.TYPE_CLASS_NUMBER);
+        total.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        dialog("Satis ekle", form(customer, stock, qty, serial, total, note), () -> {
+            int count = number(qty, selectedStockUuid.isEmpty() ? 0 : 1);
+            double amount = money(total);
+            if (amount <= 0 && selectedStockPrice > 0 && count > 0) amount = selectedStockPrice * count;
+            db.addSaleWithStock(selectedCustomerUuid.isEmpty() ? db.firstCustomerUuid() : selectedCustomerUuid, amount, val(note), selectedStockUuid, count, selectedStockName, val(serial));
+            refreshList();
+        });
+    }
+
     private void collectionDialog() {
         EditText source = input("Servis / satış", false), amount = input("Tutar", false), method = input("Ödeme yöntemi", false);
         source.setFocusable(false);
@@ -659,6 +705,32 @@ public class MainActivity extends Activity {
             .setTitle("Müşteri seç")
             .setItems(names, (d, which) -> {
                 selectedCustomerUuid = uuids[which];
+                target.setText(names[which]);
+            })
+            .show();
+    }
+
+    private void pickStock(EditText target) {
+        Cursor c = db.stockForPick();
+        int count = c.getCount();
+        if (count <= 0) { c.close(); toast("Stokta urun yok."); return; }
+        String[] names = new String[count];
+        String[] uuids = new String[count];
+        double[] prices = new double[count];
+        int i = 0;
+        while (c.moveToNext()) {
+            uuids[i] = c.getString(c.getColumnIndexOrThrow("uuid"));
+            names[i] = c.getString(c.getColumnIndexOrThrow("name"));
+            prices[i] = c.getDouble(c.getColumnIndexOrThrow("birim_fiyat"));
+            i++;
+        }
+        c.close();
+        new AlertDialog.Builder(this)
+            .setTitle("Urun/parca sec")
+            .setItems(names, (d, which) -> {
+                selectedStockUuid = uuids[which];
+                selectedStockName = names[which];
+                selectedStockPrice = prices[which];
                 target.setText(names[which]);
             })
             .show();
@@ -786,7 +858,7 @@ public class MainActivity extends Activity {
             }
             @Override protected void onPostExecute(String err) {
                 if (!err.isEmpty()) { toast("Senkron olmadı: " + err); return; }
-                refreshList();
+                if (list == null) showHome(); else refreshList();
                 if (notifyStart || count > 0) toast("Senkron tamam: " + count + " kayıt");
             }
         }.execute();

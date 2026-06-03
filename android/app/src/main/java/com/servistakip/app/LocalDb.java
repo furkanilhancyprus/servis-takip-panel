@@ -131,6 +131,13 @@ class LocalDb extends SQLiteOpenHelper {
         );
     }
 
+    Cursor stockForPick() {
+        return getReadableDatabase().rawQuery(
+            "SELECT uuid, parca_adi || CASE WHEN marka IS NOT NULL AND marka!='' THEN ' - ' || marka ELSE '' END || ' | Stok: ' || stok_miktari || ' | ' || birim_fiyat AS name, birim_fiyat, stok_miktari FROM parcalar WHERE deleted_at IS NULL ORDER BY parca_adi ASC",
+            null
+        );
+    }
+
     String customerName(String uuid) {
         Cursor c = getReadableDatabase().rawQuery("SELECT ad, soyad FROM musteriler WHERE uuid=?", new String[]{uuid});
         try {
@@ -307,6 +314,11 @@ class LocalDb extends SQLiteOpenHelper {
         getWritableDatabase().insert("servisler", null, cv);
     }
 
+    void addServiceWithStock(String musteriUuid, String tip, double total, String note, String stockUuid, int qty, String stockName) {
+        addService(musteriUuid, tip, total, enrichNote(note, stockName, qty));
+        decrementStock(stockUuid, qty);
+    }
+
     void addSale(String musteriUuid, double total, String note) {
         ContentValues cv = baseValues();
         cv.put("musteri_uuid", musteriUuid);
@@ -320,6 +332,45 @@ class LocalDb extends SQLiteOpenHelper {
         cv.put("pesinat", 0);
         cv.put("seri_no", "");
         getWritableDatabase().insert("satislar", null, cv);
+    }
+
+    void addSaleWithStock(String musteriUuid, double total, String note, String stockUuid, int qty, String stockName, String serialNo) {
+        ContentValues cv = baseValues();
+        cv.put("musteri_uuid", musteriUuid);
+        cv.put("toplam_tutar", total);
+        cv.put("odeme_durumu", "odenmedi");
+        cv.put("odenen_tutar", 0);
+        cv.put("notlar", enrichNote(note, stockName, qty));
+        cv.put("satis_tarihi", today());
+        cv.put("odeme_turu", "pesin");
+        cv.put("taksit_sayisi", 1);
+        cv.put("pesinat", 0);
+        cv.put("seri_no", serialNo);
+        getWritableDatabase().insert("satislar", null, cv);
+        decrementStock(stockUuid, qty);
+    }
+
+    private String enrichNote(String note, String stockName, int qty) {
+        String base = note == null ? "" : note.trim();
+        if (stockName == null || stockName.trim().isEmpty() || qty <= 0) return base;
+        String line = "Urun/Parca: " + stockName + " x " + qty;
+        return base.isEmpty() ? line : base + "\n" + line;
+    }
+
+    private void decrementStock(String stockUuid, int qty) {
+        if (stockUuid == null || stockUuid.isEmpty() || qty <= 0) return;
+        ContentValues cv = new ContentValues();
+        Cursor c = getReadableDatabase().rawQuery("SELECT stok_miktari FROM parcalar WHERE uuid=?", new String[]{stockUuid});
+        try {
+            if (!c.moveToFirst()) return;
+            int current = c.getInt(0);
+            cv.put("stok_miktari", Math.max(0, current - qty));
+            cv.put("updated_at", now());
+            cv.putNull("synced_at");
+            getWritableDatabase().update("parcalar", cv, "uuid=?", new String[]{stockUuid});
+        } finally {
+            c.close();
+        }
     }
 
     void addCollection(String musteriUuid, String kaynakTip, String kaynakUuid, double amount, String method) {
