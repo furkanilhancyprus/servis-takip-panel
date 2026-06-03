@@ -23,6 +23,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -69,49 +70,135 @@ public class MainActivity extends Activity {
     }
 
     private void showLogin() {
+        showAuth(false);
+    }
+
+    private void showAuth(boolean registerMode) {
         root.removeAllViews();
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(dp(24), dp(28), dp(24), dp(28));
+        root.setGravity(Gravity.NO_GRAVITY);
+        root.setPadding(0, 0, 0, 0);
+        root.setBackgroundColor(Color.rgb(241, 245, 249));
 
-        TextView logo = label("SP", 24, Color.WHITE, Typeface.BOLD);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(20), dp(22), dp(20), dp(24));
+        page.setGravity(Gravity.CENTER_HORIZONTAL);
+        scroll.addView(page, new ScrollView.LayoutParams(-1, -2));
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER_HORIZONTAL);
+        hero.setPadding(dp(22), dp(24), dp(22), dp(22));
+        GradientDrawable heroBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{NAVY, Color.rgb(29, 78, 216), Color.rgb(14, 165, 233)});
+        heroBg.setCornerRadius(dp(24));
+        hero.setBackground(heroBg);
+        hero.setElevation(dp(8));
+        page.addView(hero, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView logo = label("✓", 34, Color.WHITE, Typeface.BOLD);
         logo.setGravity(Gravity.CENTER);
-        logo.setBackgroundResource(R.drawable.logo_badge);
-        root.addView(logo, new LinearLayout.LayoutParams(dp(76), dp(76)));
+        logo.setBackground(round(Color.rgb(37, 99, 235), dp(22), Color.argb(90, 255, 255, 255)));
+        hero.addView(logo, new LinearLayout.LayoutParams(dp(78), dp(78)));
 
-        TextView h = label("Servis Takip Panel", 25, TEXT, Typeface.BOLD);
-        h.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
-        hp.setMargins(0, dp(18), 0, dp(4));
-        root.addView(h, hp);
+        TextView brand = label("Servis Takip Panel", 28, Color.WHITE, Typeface.BOLD);
+        brand.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams brandLp = new LinearLayout.LayoutParams(-1, -2);
+        brandLp.setMargins(0, dp(16), 0, dp(6));
+        hero.addView(brand, brandLp);
 
-        TextView p = label("Müşteri, servis, satış ve tahsilat kayıtlarınızı telefondan offline yönetin.", 14, MUTED, Typeface.NORMAL);
-        p.setGravity(Gravity.CENTER);
-        root.addView(p, new LinearLayout.LayoutParams(-1, -2));
+        TextView tagline = label("Arıtma servisleri için müşteri, bakım, stok ve tahsilat takibi.", 14, Color.rgb(219, 234, 254), Typeface.NORMAL);
+        tagline.setGravity(Gravity.CENTER);
+        tagline.setLineSpacing(dp(2), 1.0f);
+        hero.addView(tagline, new LinearLayout.LayoutParams(-1, -2));
 
-        EditText email = input("E-posta", false);
-        EditText pass = input("Şifre", true);
-        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(-1, dp(52));
-        ip.setMargins(0, dp(24), 0, dp(10));
-        root.addView(email, ip);
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, dp(52));
-        pp.setMargins(0, 0, 0, 0);
-        root.addView(pass, pp);
+        LinearLayout chips = new LinearLayout(this);
+        chips.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams chipsLp = new LinearLayout.LayoutParams(-1, -2);
+        chipsLp.setMargins(0, dp(18), 0, 0);
+        hero.addView(chips, chipsLp);
+        chips.addView(chip("Offline"));
+        chips.addView(chip("Senkron"));
+        chips.addView(chip("Web + Mobil"));
 
-        Button login = primaryButton("Giriş yap ve senkronize et");
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(52));
-        bp.setMargins(0, dp(18), 0, 0);
-        root.addView(login, bp);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(18), dp(18), dp(18));
+        card.setBackground(round(Color.WHITE, dp(22), BORDER));
+        card.setElevation(dp(6));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+        cardLp.setMargins(0, dp(18), 0, 0);
+        page.addView(card, cardLp);
 
-        TextView offline = label("İnternet yokken kayıt alır, bağlantı geldiğinde web panelle eşitler.", 12, MUTED, Typeface.NORMAL);
-        offline.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-1, -2);
-        op.setMargins(0, dp(14), 0, 0);
-        root.addView(offline, op);
+        LinearLayout segment = new LinearLayout(this);
+        segment.setPadding(dp(4), dp(4), dp(4), dp(4));
+        segment.setBackground(round(Color.rgb(241, 245, 249), dp(16), BORDER));
+        card.addView(segment, new LinearLayout.LayoutParams(-1, dp(54)));
+        Button loginTab = segmentButton("Giriş Yap", !registerMode);
+        Button registerTab = segmentButton("Kayıt Ol", registerMode);
+        segment.addView(loginTab, new LinearLayout.LayoutParams(0, -1, 1));
+        segment.addView(registerTab, new LinearLayout.LayoutParams(0, -1, 1));
+        loginTab.setOnClickListener(v -> showAuth(false));
+        registerTab.setOnClickListener(v -> showAuth(true));
+
+        TextView formTitle = label(registerMode ? "Ücretsiz hesap oluştur" : "Hesabınıza giriş yapın", 20, TEXT, Typeface.BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
+        titleLp.setMargins(0, dp(18), 0, dp(4));
+        card.addView(formTitle, titleLp);
+        TextView formText = label(registerMode ? "Kayıt sonrası web panel ve mobil senkron aynı hesapla çalışır." : "İnternet yokken kayıt almaya devam edin; bağlantı gelince otomatik eşitleyin.", 13, MUTED, Typeface.NORMAL);
+        formText.setLineSpacing(dp(2), 1.0f);
+        card.addView(formText, new LinearLayout.LayoutParams(-1, -2));
+
+        EditText company = null;
+        EditText fullName = null;
+        EditText phone = null;
+        EditText password2 = null;
+        if (registerMode) {
+            company = authField("Firma adı", false);
+            fullName = authField("Ad soyad", false);
+            phone = authField("Telefon", false);
+            addField(card, company, dp(18));
+            addField(card, fullName, dp(10));
+        }
+
+        EditText email = authField("E-posta", false);
+        EditText pass = authField("Şifre", true);
+        addField(card, email, registerMode ? dp(10) : dp(18));
+        if (registerMode) addField(card, phone, dp(10));
+        addField(card, pass, dp(10));
+        if (registerMode) {
+            password2 = authField("Şifre tekrar", true);
+            addField(card, password2, dp(10));
+        }
+
+        Button submit = primaryButton(registerMode ? "Ücretsiz kaydı oluştur" : "Giriş yap");
+        LinearLayout.LayoutParams submitLp = new LinearLayout.LayoutParams(-1, dp(54));
+        submitLp.setMargins(0, dp(18), 0, 0);
+        card.addView(submit, submitLp);
 
         progress = new ProgressBar(this);
         progress.setVisibility(View.GONE);
-        root.addView(progress, new LinearLayout.LayoutParams(dp(42), dp(42)));
-        login.setOnClickListener(v -> doLogin(email.getText().toString(), pass.getText().toString()));
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        progressLp.gravity = Gravity.CENTER_HORIZONTAL;
+        progressLp.setMargins(0, dp(12), 0, 0);
+        card.addView(progress, progressLp);
+
+        TextView footer = label("ServisTakipPanel.com hesabınızla masaüstü, web ve mobil birlikte çalışır.", 12, MUTED, Typeface.NORMAL);
+        footer.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(-1, -2);
+        footerLp.setMargins(0, dp(14), 0, 0);
+        page.addView(footer, footerLp);
+
+        EditText c = company, f = fullName, ph = phone, p2 = password2;
+        submit.setOnClickListener(v -> {
+            if (registerMode) {
+                doRegister(val(c), val(f), val(email), val(ph), val(pass), val(p2));
+            } else {
+                doLogin(val(email), val(pass));
+            }
+        });
     }
 
     private void showHome() {
@@ -482,6 +569,40 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private void doRegister(String company, String fullName, String email, String phone, String password, String password2) {
+        if (company.isEmpty() || fullName.isEmpty() || email.isEmpty() || password.isEmpty()) {
+            toast("Firma, ad soyad, e-posta ve şifre gerekli.");
+            return;
+        }
+        if (!password.equals(password2)) {
+            toast("Şifreler eşleşmiyor.");
+            return;
+        }
+        progress.setVisibility(View.VISIBLE);
+        new AsyncTask<Void, Void, String>() {
+            @Override protected String doInBackground(Void... unused) {
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("firma_adi", company);
+                    body.put("ad_soyad", fullName);
+                    body.put("email", email.trim());
+                    body.put("telefon", phone);
+                    body.put("sifre", password);
+                    body.put("sifre2", password2);
+                    body.put("paket", "ucretsiz");
+                    ApiClient.post("/api/auth.php?action=kayit", "", body);
+                    return "";
+                } catch (Exception e) { return e.getMessage(); }
+            }
+            @Override protected void onPostExecute(String err) {
+                progress.setVisibility(View.GONE);
+                if (!err.isEmpty()) { toast(err); return; }
+                toast("Kayıt oluşturuldu. Senkron başlatılıyor...");
+                doLogin(email, password);
+            }
+        }.execute();
+    }
+
     private void doLogin(String email, String password) {
         if (email.trim().isEmpty() || password.isEmpty()) { toast("E-posta ve şifre gerekli."); return; }
         progress.setVisibility(View.VISIBLE);
@@ -578,6 +699,20 @@ public class MainActivity extends Activity {
         return e;
     }
 
+    private EditText authField(String hint, boolean password) {
+        EditText e = input(hint, password);
+        e.setTextColor(TEXT);
+        e.setHintTextColor(Color.rgb(148, 163, 184));
+        e.setBackground(round(Color.rgb(248, 250, 252), dp(14), BORDER));
+        return e;
+    }
+
+    private void addField(LinearLayout parent, EditText field, int topMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(54));
+        lp.setMargins(0, topMargin, 0, 0);
+        parent.addView(field, lp);
+    }
+
     private Button button(String text) {
         Button b = new Button(this);
         b.setText(text);
@@ -607,6 +742,25 @@ public class MainActivity extends Activity {
         b.setTypeface(null, active ? Typeface.BOLD : Typeface.NORMAL);
         b.setBackground(round(active ? NAVY : Color.WHITE, dp(22), active ? NAVY : BORDER));
         return b;
+    }
+
+    private Button segmentButton(String text, boolean active) {
+        Button b = button(text);
+        b.setTextColor(active ? Color.WHITE : TEXT);
+        b.setTypeface(null, Typeface.BOLD);
+        b.setBackground(round(active ? BLUE : Color.TRANSPARENT, dp(13), active ? BLUE : Color.TRANSPARENT));
+        return b;
+    }
+
+    private TextView chip(String text) {
+        TextView v = label(text, 12, Color.WHITE, Typeface.BOLD);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(10), 0, dp(10), 0);
+        v.setBackground(round(Color.argb(34, 255, 255, 255), dp(14), Color.argb(80, 255, 255, 255)));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(30));
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        v.setLayoutParams(lp);
+        return v;
     }
 
     private GradientDrawable round(int fill, int radius, int stroke) {
