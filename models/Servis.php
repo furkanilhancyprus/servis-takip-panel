@@ -29,7 +29,7 @@ class Servis extends Model {
         return $this->db->fetchAll($sql, $params);
     }
 
-    public function getById(int $id): array|false {
+    public function getById(int $id) {
         $servis = $this->db->fetchOne("
             SELECT s.*, m.ad, m.soyad, m.telefon, m.adres, m.email
             FROM servisler s

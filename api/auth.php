@@ -5,7 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/config/database.php';
 
-function json_ok(mixed $data, string $message = ''): void {
+function json_ok($data, string $message = ''): void {
     echo json_encode(['success' => true, 'data' => $data, 'message' => $message], JSON_UNESCAPED_UNICODE);
     exit;
 }

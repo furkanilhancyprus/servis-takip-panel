@@ -3,7 +3,7 @@ require_once __DIR__ . '/Model.php';
 
 class PeriyodikBakim extends Model {
 
-    public function getByMusteriId(int $musteriId): array|false {
+    public function getByMusteriId(int $musteriId) {
         return $this->db->fetchOne("
             SELECT pb.*, m.ad, m.soyad, m.telefon, m.email
             FROM periyodik_bakimlar pb JOIN musteriler m ON pb.musteri_id=m.id

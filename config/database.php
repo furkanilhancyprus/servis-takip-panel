@@ -50,11 +50,11 @@ class Database {
         return $this->query($sql, $params)->fetchAll();
     }
 
-    public function fetchOne(string $sql, array $params = []): array|false {
+    public function fetchOne(string $sql, array $params = []) {
         return $this->query($sql, $params)->fetch();
     }
 
-    public function fetchColumn(string $sql, array $params = []): mixed {
+    public function fetchColumn(string $sql, array $params = []) {
         return $this->query($sql, $params)->fetchColumn();
     }
 

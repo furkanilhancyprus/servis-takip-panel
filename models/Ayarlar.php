@@ -11,12 +11,12 @@ class Ayarlar extends Model {
         return $result;
     }
 
-    public function get(string $anahtar, mixed $default = null): mixed {
+    public function get(string $anahtar, $default = null) {
         $val = $this->db->fetchColumn("SELECT deger FROM ayarlar WHERE firma_id=? AND anahtar=?", [$this->firmaId, $anahtar]);
         return $val !== false ? $val : $default;
     }
 
-    public function set(string $anahtar, mixed $deger): void {
+    public function set(string $anahtar, $deger): void {
         $this->db->query("
             INSERT INTO ayarlar (firma_id, anahtar, deger) VALUES (?,?,?)
             ON CONFLICT(firma_id, anahtar) DO UPDATE SET deger=excluded.deger, updated_at=CURRENT_TIMESTAMP

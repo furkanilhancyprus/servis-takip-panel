@@ -14,7 +14,7 @@ class Cihaz extends Model {
         );
     }
 
-    public function getById(int $id): array|false {
+    public function getById(int $id) {
         return $this->db->fetchOne(
             "SELECT c.*, p.stok_miktari, p.kritik_stok_seviyesi
              FROM cihazlar c

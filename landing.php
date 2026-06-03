@@ -17,7 +17,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Servis Takip Panel — Su Arıtma Servis Yönetim Sistemi</title>
     <meta name="description" content="Su arıtma firmanızı dijitalleştirin. Müşteri takibi, periyodik bakım yönetimi, stok ve tahsilat — tek platformda.">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/tailwind.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">

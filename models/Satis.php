@@ -32,7 +32,7 @@ class Satis extends Model {
         return $this->db->fetchAll($sql, $params);
     }
 
-    public function getById(int $id): array|false {
+    public function getById(int $id) {
         $satis = $this->db->fetchOne("
             SELECT st.*, m.ad, m.soyad, m.telefon, m.adres,
                    c.cihaz_adi, c.marka AS cihaz_marka, c.model AS cihaz_model

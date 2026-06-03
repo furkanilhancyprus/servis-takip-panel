@@ -6,7 +6,7 @@ header('X-Content-Type-Options: nosniff');
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/config/database.php';
 
-function chat_ok(mixed $data = null, string $message = ''): void {
+function chat_ok($data = null, string $message = ''): void {
     echo json_encode(['success' => true, 'data' => $data, 'message' => $message], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -30,7 +30,7 @@ function chat_visitor_id(): string {
     return $_SESSION['support_visitor_id'];
 }
 
-function chat_conversation(Database $db, int $id, string $visitorId): array|false {
+function chat_conversation(Database $db, int $id, string $visitorId) {
     return $db->fetchOne(
         "SELECT * FROM support_conversations WHERE id=? AND visitor_id=?",
         [$id, $visitorId]

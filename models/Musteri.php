@@ -34,7 +34,7 @@ class Musteri extends Model {
         return $rows;
     }
 
-    public function getById(int $id): array|false {
+    public function getById(int $id) {
         $musteri = $this->db->fetchOne("
             SELECT m.*, pb.aktif as bakim_aktif, pb.periyot_ay,
                    pb.son_bakim_tarihi, pb.sonraki_bakim_tarihi,

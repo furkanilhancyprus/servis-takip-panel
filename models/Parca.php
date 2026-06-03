@@ -6,7 +6,7 @@ class Parca extends Model {
         return $this->db->fetchAll("SELECT * FROM parcalar WHERE firma_id=? AND deleted_at IS NULL ORDER BY parca_adi ASC", [$this->firmaId]);
     }
 
-    public function getById(int $id): array|false {
+    public function getById(int $id) {
         return $this->db->fetchOne("SELECT * FROM parcalar WHERE id=? AND firma_id=? AND deleted_at IS NULL", [$id, $this->firmaId]);
     }
 
