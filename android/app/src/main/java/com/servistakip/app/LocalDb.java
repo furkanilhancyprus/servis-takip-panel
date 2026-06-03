@@ -154,6 +154,76 @@ class LocalDb extends SQLiteOpenHelper {
         }
     }
 
+    String detailByRowId(String module, long rowId) {
+        String table = tableForModule(module);
+        Cursor c = getReadableDatabase().rawQuery("SELECT * FROM " + table + " WHERE rowid=?", new String[]{String.valueOf(rowId)});
+        try {
+            if (!c.moveToFirst()) return "";
+            switch (module) {
+                case "stok":
+                    return "Ürün: " + safe(c, "parca_adi") +
+                        "\nMarka: " + safe(c, "marka") +
+                        "\nStok: " + safe(c, "stok_miktari") +
+                        "\nBirim fiyat: " + safe(c, "birim_fiyat") +
+                        "\nSenkron: " + syncLabel(c);
+                case "servis":
+                    return "Müşteri: " + customerName(safe(c, "musteri_uuid")) +
+                        "\nServis tipi: " + safe(c, "servis_tipi") +
+                        "\nDurum: " + safe(c, "durum") +
+                        "\nTutar: " + safe(c, "toplam_tutar") +
+                        "\nÖdeme: " + safe(c, "odeme_durumu") +
+                        "\nNot: " + safe(c, "notlar") +
+                        "\nSenkron: " + syncLabel(c);
+                case "satis":
+                    return "Müşteri: " + customerName(safe(c, "musteri_uuid")) +
+                        "\nTutar: " + safe(c, "toplam_tutar") +
+                        "\nÖdeme: " + safe(c, "odeme_durumu") +
+                        "\nSatış tarihi: " + safe(c, "satis_tarihi") +
+                        "\nNot: " + safe(c, "notlar") +
+                        "\nSenkron: " + syncLabel(c);
+                case "tahsilat":
+                    return "Müşteri: " + customerName(safe(c, "musteri_uuid")) +
+                        "\nKaynak: " + safe(c, "kaynak_tip") +
+                        "\nTutar: " + safe(c, "tutar") +
+                        "\nÖdeme yöntemi: " + safe(c, "odeme_yontemi") +
+                        "\nTarih: " + safe(c, "tahsilat_tarihi") +
+                        "\nSenkron: " + syncLabel(c);
+                case "bakim":
+                    return "Müşteri: " + customerName(safe(c, "musteri_uuid")) +
+                        "\nPeriyot: " + safe(c, "periyot_ay") + " ay" +
+                        "\nSon bakım: " + safe(c, "son_bakim_tarihi") +
+                        "\nSonraki bakım: " + safe(c, "sonraki_bakim_tarihi") +
+                        "\nHatırlatma: " + safe(c, "hatirlatma_gun") + " gün" +
+                        "\nSenkron: " + syncLabel(c);
+                default:
+                    return "Ad soyad: " + safe(c, "ad") + " " + safe(c, "soyad") +
+                        "\nTelefon: " + safe(c, "telefon") +
+                        "\nE-posta: " + safe(c, "email") +
+                        "\nAdres: " + safe(c, "adres") +
+                        "\nKonum: " + locationLabel(c) +
+                        "\nSenkron: " + syncLabel(c);
+            }
+        } finally {
+            c.close();
+        }
+    }
+
+    private String safe(Cursor c, String column) {
+        int idx = c.getColumnIndex(column);
+        if (idx < 0 || c.isNull(idx)) return "";
+        return c.getString(idx);
+    }
+
+    private String syncLabel(Cursor c) {
+        return safe(c, "synced_at").isEmpty() ? "Bekliyor" : "Senkronize";
+    }
+
+    private String locationLabel(Cursor c) {
+        String lat = safe(c, "lat");
+        String lng = safe(c, "lng");
+        return lat.isEmpty() || lng.isEmpty() ? "Yok" : lat + ", " + lng;
+    }
+
     void softDelete(String module, long rowId) {
         String table = tableForModule(module);
         ContentValues cv = new ContentValues();
