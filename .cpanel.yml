@@ -1,10 +1,7 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/adatechn/servistakippanel.com/
-    - /bin/mkdir -p $DEPLOYPATH
-    - /bin/rsync -av --delete --exclude='.git' --exclude='.cpanel.yml' --exclude='database/musteri-takip.db' --exclude='*.sqlite' --exclude='*.sqlite3' --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' --exclude='.env' --exclude='desktop-app/node_modules' --exclude='desktop-app/dist' --exclude='desktop-app/resources' --exclude='desktop-app/build/VC_redist*.exe' --exclude='android/.gradle' --exclude='android/build' --exclude='android/app/build' --exclude='android/keystore.properties' --exclude='android/release-key.jks' --exclude='downloads/*.exe' --exclude='downloads/*.apk' ./ $DEPLOYPATH
-    - /bin/mkdir -p $DEPLOYPATH/database
-    - /bin/mkdir -p $DEPLOYPATH/downloads
-    - /bin/chmod 755 $DEPLOYPATH/database
-    - /bin/chmod 755 $DEPLOYPATH/downloads
+    - /bin/mkdir -p /home/adatechn/servis-takip-panel/database
+    - /bin/mkdir -p /home/adatechn/servis-takip-panel/downloads
+    - /bin/chmod 755 /home/adatechn/servis-takip-panel/database
+    - /bin/chmod 755 /home/adatechn/servis-takip-panel/downloads

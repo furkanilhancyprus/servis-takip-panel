@@ -57,6 +57,11 @@ if ($action === 'kayit') {
     $sifre     = $input['sifre']    ?? '';
     $sifre2    = $input['sifre2']   ?? '';
     $telefon   = trim($input['telefon']  ?? '');
+    $paket     = $input['paket'] ?? 'ucretsiz';
+    $allowedPackages = ['ucretsiz', 'standart', 'premium'];
+    if (!in_array($paket, $allowedPackages, true)) {
+        $paket = 'ucretsiz';
+    }
 
     if (!$firmaAdi || !$adSoyad || !$email || !$sifre) {
         json_err('Tüm zorunlu alanları doldurun.');
@@ -79,8 +84,8 @@ if ($action === 'kayit') {
 
     $hash    = password_hash($sifre, PASSWORD_BCRYPT);
     $firmaId = $db->execute(
-        "INSERT INTO kullanicilar (firma_adi, ad_soyad, email, sifre, telefon) VALUES (?, ?, ?, ?, ?)",
-        [$firmaAdi, $adSoyad, $email, $hash, $telefon]
+        "INSERT INTO kullanicilar (firma_adi, ad_soyad, email, sifre, telefon, paket, abonelik_durumu) VALUES (?, ?, ?, ?, ?, ?, 'aktif')",
+        [$firmaAdi, $adSoyad, $email, $hash, $telefon, $paket]
     );
 
     // Varsayılan verileri oluştur

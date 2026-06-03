@@ -5,6 +5,16 @@ if (isset($_SESSION['firma_id'])) {
     header('Location: index.php');
     exit;
 }
+$allowedPackages = ['ucretsiz', 'standart', 'premium'];
+$selectedPackage = $_GET['paket'] ?? 'ucretsiz';
+if (!in_array($selectedPackage, $allowedPackages, true)) {
+    $selectedPackage = 'ucretsiz';
+}
+$packageLabels = [
+    'ucretsiz' => 'Ücretsiz',
+    'standart' => 'Standart',
+    'premium' => 'Premium',
+];
 ?>
 <!DOCTYPE html>
 <html lang="tr">
@@ -45,13 +55,18 @@ if (isset($_SESSION['firma_id'])) {
         <!-- Card -->
         <div class="bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
 
-            <h1 class="text-2xl font-bold text-slate-800 mb-1">Ücretsiz Hesap Oluşturun</h1>
-            <p class="text-slate-500 text-sm mb-7">Kredi kartı gerekmez. Hemen başlayın.</p>
+            <h1 class="text-2xl font-bold text-slate-800 mb-1"><?= htmlspecialchars($packageLabels[$selectedPackage]) ?> Hesap Oluşturun</h1>
+            <p class="text-slate-500 text-sm mb-4">Kredi kartı gerekmez. Hemen başlayın.</p>
+            <div class="mb-7 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 flex items-center gap-2">
+                <i class="fas fa-tag"></i>
+                <span>Seçilen paket: <strong><?= htmlspecialchars($packageLabels[$selectedPackage]) ?></strong></span>
+            </div>
 
             <!-- Hata / Başarı mesajı -->
             <div id="alertBox" class="hidden mb-4 p-3 rounded-xl text-sm flex items-center gap-2"></div>
 
             <form id="kayitForm" class="space-y-4">
+                <input type="hidden" id="paket" value="<?= htmlspecialchars($selectedPackage) ?>">
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">
@@ -222,6 +237,7 @@ if (isset($_SESSION['firma_id'])) {
                     ad_soyad:  document.getElementById('ad_soyad').value,
                     email:     document.getElementById('email').value,
                     telefon:   document.getElementById('telefon').value,
+                    paket:     document.getElementById('paket').value,
                     sifre,
                     sifre2,
                 })

@@ -1,4 +1,16 @@
-﻿<!DOCTYPE html>
+﻿<?php
+function stp_download_exists(string $relativePath): bool {
+    return is_file(__DIR__ . '/' . ltrim($relativePath, '/'));
+}
+
+function stp_download_button(string $relativePath, string $label, string $iconClass, string $classes, string $fallbackMessage): void {
+    if (stp_download_exists($relativePath)) {
+        echo '<a href="' . htmlspecialchars($relativePath) . '" class="' . htmlspecialchars($classes) . '"><i class="' . htmlspecialchars($iconClass) . '"></i> ' . htmlspecialchars($label) . '</a>';
+        return;
+    }
+    echo '<button type="button" data-chat-message="' . htmlspecialchars($fallbackMessage) . '" class="' . htmlspecialchars($classes) . '"><i class="fas fa-clock"></i> Yükleniyor - Talep Et</button>';
+}
+?><!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -83,7 +95,7 @@
             <!-- CTA -->
             <div class="flex items-center gap-3">
                 <a href="giris.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Giriş Yap</a>
-                <a href="kayit.php" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                <a href="kayit.php?paket=ucretsiz" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
                     Ücretsiz Başla
                 </a>
             </div>
@@ -121,7 +133,7 @@
                 </p>
 
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <a href="kayit.php"
+                    <a href="kayit.php?paket=ucretsiz"
                         class="inline-flex items-center justify-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-7 py-4 rounded-xl transition text-base shadow-lg shadow-blue-900/20">
                         <i class="fas fa-rocket"></i>
                         Ücretsiz Başla
@@ -440,7 +452,7 @@
         </div>
 
         <div class="text-center mt-12">
-            <a href="kayit.php" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-xl transition shadow-lg shadow-blue-200 text-base">
+            <a href="kayit.php?paket=ucretsiz" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-xl transition shadow-lg shadow-blue-200 text-base">
                 <i class="fas fa-rocket"></i> Hemen Başla — Ücretsiz
             </a>
         </div>
@@ -476,7 +488,7 @@
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Sistemi risksiz keşfetme</li>
                     <li class="flex items-center gap-2 text-sm text-slate-400"><i class="fas fa-times text-slate-300 w-4"></i>Gelişmiş senkron ve ekip özellikleri hariç</li>
                 </ul>
-                <a href="kayit.php" class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
+                <a href="kayit.php?paket=ucretsiz" class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
                     Ücretsiz Başla
                 </a>
             </div>
@@ -496,7 +508,7 @@
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Offline kullanım ve otomatik senkron</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Raporlar, stok ve tahsilat takibi</li>
                 </ul>
-                <a href="kayit.php" class="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition text-sm shadow-lg shadow-blue-200">
+                <a href="kayit.php?paket=standart" class="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition text-sm shadow-lg shadow-blue-200">
                     Standart ile Başla
                 </a>
             </div>
@@ -512,7 +524,7 @@
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Kurulum ve geçiş desteği</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Özel ihtiyaçlara göre planlama</li>
                 </ul>
-                <a href="mailto:furkanilhancyprus@gmail.com?subject=Servis Takip Panel Premium Paket"
+                <a href="#supportChat" data-chat-message="Premium paket hakkında bilgi almak istiyorum."
                    class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
                     Premium İçin Görüşelim
                 </a>
@@ -527,7 +539,7 @@
                     Sadece Windows masaüstünde, internetsiz ve limitsiz çalışacak lokal kullanım isteyen firmalar için ayrıca teklif hazırlanır.
                 </p>
             </div>
-            <a href="mailto:furkanilhancyprus@gmail.com?subject=Servis Takip Panel Lokal Lifetime Paket"
+            <a href="#supportChat" data-chat-message="Lokal Lifetime paket için teklif almak istiyorum."
                class="inline-flex justify-center items-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-sm transition">
                 <i class="fas fa-envelope"></i> Lokal Paket İçin İletişime Geçin
             </a>
@@ -607,10 +619,13 @@
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-xs text-amber-700">
                             <strong>Web hesabınızla giriş yapın</strong> — İnternetsiz çalışır, bağlantı gelince otomatik senkronize olur.
                         </div>
-                        <a href="downloads/ServisTakipPanel-Kurulum.exe"
-                           class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm">
-                            <i class="fas fa-download"></i> Setup İndir (.exe)
-                        </a>
+                        <?php stp_download_button(
+                            'downloads/ServisTakipPanel-Kurulum.exe',
+                            'Setup İndir (.exe)',
+                            'fas fa-download',
+                            'inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm',
+                            'Windows masaüstü setup dosyasını indirmek istiyorum.'
+                        ); ?>
                     </div>
                 </div>
             </div>
@@ -632,10 +647,13 @@
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-xs text-amber-700">
                             Web panel, mobil uygulama ve bulut senkron dahil değildir. Teklif ve kurulum bilgisi için iletişime geçin.
                         </div>
-                        <a href="downloads/ServisTakipPanel-Lokal-Lifetime-Kurulum.exe"
-                           class="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm">
-                            <i class="fas fa-download"></i> Lokal Kurulum Dosyası
-                        </a>
+                        <?php stp_download_button(
+                            'downloads/ServisTakipPanel-Lokal-Lifetime-Kurulum.exe',
+                            'Lokal Kurulum Dosyası',
+                            'fas fa-download',
+                            'inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm',
+                            'Lokal Lifetime kurulum dosyasını indirmek istiyorum.'
+                        ); ?>
                     </div>
                 </div>
             </div>
@@ -657,10 +675,13 @@
                         <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-5 text-xs text-emerald-700">
                             Native Android uygulaması offline kayıt tutar; internet bağlantısı geldiğinde web panelle senkronize olur.
                         </div>
-                        <a href="downloads/ServisTakipPanel.apk"
-                           class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm">
-                            <i class="fab fa-android"></i> APK İndir
-                        </a>
+                        <?php stp_download_button(
+                            'downloads/ServisTakipPanel.apk',
+                            'APK İndir',
+                            'fab fa-android',
+                            'inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm',
+                            'Android APK dosyasını indirmek istiyorum.'
+                        ); ?>
                     </div>
                 </div>
             </div>
@@ -671,7 +692,7 @@
         <div class="mt-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 text-white text-center">
             <h3 class="text-xl font-bold mb-2">Masaüstü Uygulamasını Kullanmak İstiyor musunuz?</h3>
             <p class="text-blue-100 text-sm mb-5">Web hesabınızla giriş yapın; masaüstünde offline çalışın, internete bağlanınca verileriniz senkronize olsun.</p>
-            <a href="mailto:furkanilhancyprus@gmail.com?subject=Servis Takip Panel Bilgi Talebi"
+            <a href="#supportChat" data-chat-message="Masaüstü uygulaması hakkında bilgi almak istiyorum."
                class="inline-flex items-center gap-2 bg-white text-blue-700 font-bold px-7 py-3 rounded-xl transition hover:bg-blue-50 text-sm">
                 <i class="fas fa-envelope"></i> Bilgi Al
             </a>
@@ -689,11 +710,11 @@
             Bugün kaydolun, dakikalar içinde kullanmaya başlayın.<br>Kredi kartı gerekmez.
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="kayit.php"
+            <a href="kayit.php?paket=ucretsiz"
                 class="inline-flex items-center justify-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-8 py-4 rounded-xl transition text-base shadow-xl">
                 <i class="fas fa-rocket"></i> Ücretsiz Başla
             </a>
-            <a href="mailto:destek@servistakippanel.com"
+            <a href="#supportChat" data-chat-message="Merhaba, destek almak istiyorum."
                 class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-semibold px-8 py-4 rounded-xl transition text-base">
                 <i class="fas fa-envelope"></i> Bize Yazın
             </a>
@@ -723,14 +744,14 @@
                 <ul class="space-y-2 text-sm">
                     <li><a href="#ozellikler" class="hover:text-white transition">Özellikler</a></li>
                     <li><a href="#fiyatlar" class="hover:text-white transition">Fiyatlar</a></li>
-                    <li><a href="kayit.php" class="hover:text-white transition">Kayıt Ol</a></li>
+                    <li><a href="kayit.php?paket=ucretsiz" class="hover:text-white transition">Kayıt Ol</a></li>
                     <li><a href="giris.php" class="hover:text-white transition">Giriş Yap</a></li>
                 </ul>
             </div>
             <div>
                 <div class="text-white font-semibold text-sm mb-4">İletişim</div>
                 <ul class="space-y-2 text-sm">
-                    <li><a href="mailto:destek@servistakippanel.com" class="hover:text-white transition"><i class="fas fa-envelope mr-2"></i>destek@servistakippanel.com</a></li>
+                    <li><a href="#supportChat" data-chat-message="Merhaba, destek almak istiyorum." class="hover:text-white transition"><i class="fas fa-envelope mr-2"></i>destek@servistakippanel.com</a></li>
                     <li><span><i class="fas fa-phone mr-2"></i>0850 XXX XX XX</span></li>
                 </ul>
             </div>
@@ -819,6 +840,30 @@ const chatPanel = document.getElementById('chatPanel');
 const chatMessages = document.getElementById('chatMessages');
 const chatStartForm = document.getElementById('chatStartForm');
 const chatSendForm = document.getElementById('chatSendForm');
+
+function openSupportChat(prefill = '') {
+    chatPanel.classList.remove('hidden');
+    if (prefill) {
+        const firstMessage = document.getElementById('chatFirstMessage');
+        const followupMessage = document.getElementById('chatMessageInput');
+        if (chatStartForm && !chatStartForm.classList.contains('hidden') && firstMessage) {
+            firstMessage.value = prefill;
+            firstMessage.focus();
+        } else if (followupMessage) {
+            followupMessage.value = prefill;
+            followupMessage.focus();
+        }
+    }
+    chatLoadMessages();
+    chatStartPolling();
+}
+
+document.querySelectorAll('[data-chat-message]').forEach(el => {
+    el.addEventListener('click', e => {
+        e.preventDefault();
+        openSupportChat(el.dataset.chatMessage || '');
+    });
+});
 
 document.getElementById('chatToggle').addEventListener('click', () => {
     chatPanel.classList.toggle('hidden');
@@ -914,4 +959,6 @@ if (chatState.conversationId) {
 </script>
 </body>
 </html>
+
+
 
