@@ -58,6 +58,28 @@ require_once ROOT . '/views/layout/header.php';
     </div>
     <?php endif; ?>
 
+    <!-- Veri Tasima -->
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fas fa-box-archive text-amber-500"></i> Veri Taşıma / Lokal Lifetime Geçişi
+        </h3>
+        <p class="text-sm text-slate-500 mb-4">
+            Web hesabındaki tüm firma verisini dışa aktarabilir, Lokal Lifetime masaüstü uygulamasında aynı dosyayı içe aktarabilirsiniz.
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="api/backup.php?action=export" class="btn btn-secondary">
+                <i class="fas fa-download"></i> Firma Verisini Dışa Aktar
+            </a>
+            <label class="btn btn-primary cursor-pointer">
+                <i class="fas fa-upload"></i> Yedekten İçe Aktar
+                <input type="file" accept=".stpbackup,application/json" class="hidden" @change="importBackup($event)">
+            </label>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">
+            İçe aktarma mevcut hesabın içine verileri eşleştirerek ekler/günceller. Büyük geçişlerden önce mevcut lokal verinizi ayrıca dışa aktarın.
+        </p>
+    </div>
+
     <!-- Firma Bilgileri -->
     <div class="card p-6">
         <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -387,6 +409,32 @@ function ayarlarApp() {
                     await this.loadSyncStatus();
                 } else showToast(d.message || 'İşlem başarısız.', 'error');
             } finally { this.syncBusy = false; }
+        },
+
+        async importBackup(event) {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            if (!confirm(`"${file.name}" yedeği bu hesaba içe aktarılsın mı?`)) return;
+            this.saving = true;
+            try {
+                const text = await file.text();
+                const backup = JSON.parse(text);
+                const r = await fetch('api/backup.php?action=import', {
+                    method:'POST',
+                    headers:this.csrfHeaders(),
+                    body:JSON.stringify({ backup })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    showToast(`Yedek içe aktarıldı. ${d.data?.inserted_or_updated ?? 0} kayıt işlendi.`, 'success');
+                    await Promise.all([this.loadAyarlar(), this.loadIslemler(), this.loadCihazlar(), this.loadStoklar()]);
+                } else showToast(d.message || 'Yedek içe aktarılamadı.', 'error');
+            } catch(e) {
+                showToast('Yedek dosyası okunamadı veya geçersiz.', 'error');
+            } finally {
+                this.saving = false;
+            }
         },
 
         async loadAyarlar() {
