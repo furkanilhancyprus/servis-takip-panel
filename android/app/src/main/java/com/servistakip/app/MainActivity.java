@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -11,6 +12,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -46,11 +48,13 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private ProgressBar progress;
     private ListView list;
+    private TextView emptyState;
     private TextView title;
     private TextView subtitle;
     private CursorAdapter adapter;
     private Cursor listCursor;
-    private String module = "musteri";
+    private String module = "dashboard";
+    private String searchQuery = "";
     private static final int LOCATION_PERMISSION_REQUEST = 41;
     private String selectedCustomerUuid = "";
     private String selectedSourceUuid = "";
@@ -239,7 +243,13 @@ public class MainActivity extends Activity {
         header.addView(summaryStrip(), new LinearLayout.LayoutParams(-1, -2));
         root.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
-        root.addView(tabBar(), new LinearLayout.LayoutParams(-1, dp(58)));
+        if ("dashboard".equals(module)) {
+            root.addView(dashboardView(), new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(bottomNav(), new LinearLayout.LayoutParams(-1, dp(72)));
+            return;
+        }
+
+        root.addView(searchBar(), new LinearLayout.LayoutParams(-1, dp(62)));
         root.addView(actionBar(), new LinearLayout.LayoutParams(-1, dp(66)));
 
         list = new ListView(this);
@@ -250,12 +260,16 @@ public class MainActivity extends Activity {
         list.setClipToPadding(false);
         list.setBackgroundColor(BG);
         root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+        emptyState = emptyState();
+        root.addView(emptyState, new LinearLayout.LayoutParams(-1, 0));
+        list.setEmptyView(emptyState);
         refreshList();
         list.setOnItemClickListener((parent, view, position, id) -> showDetails(id));
         list.setOnItemLongClickListener((parent, view, position, id) -> {
             confirmDelete(id);
             return true;
         });
+        root.addView(bottomNav(), new LinearLayout.LayoutParams(-1, dp(72)));
     }
 
     private View summaryStrip() {
@@ -278,6 +292,117 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(72), 1);
         lp.setMargins(dp(3), 0, dp(3), 0);
         v.setLayoutParams(lp);
+        return v;
+    }
+
+    private View dashboardView() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14), dp(14), dp(14), dp(18));
+        scroll.addView(page);
+
+        page.addView(label("Bugunku durum", 18, TEXT, Typeface.BOLD), new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout row1 = dashRow();
+        row1.addView(dashCard("Musteriler", String.valueOf(db.visibleCount("musteri")), "Kayitli musteri", NAVY, "musteri"));
+        row1.addView(dashCard("Servisler", String.valueOf(db.visibleCount("servis")), "Saha islemleri", BLUE, "servis"));
+        page.addView(row1);
+
+        LinearLayout row2 = dashRow();
+        row2.addView(dashCard("Satis", String.valueOf(db.visibleCount("satis")), "Urun ve cihaz", Color.rgb(124, 58, 237), "satis"));
+        row2.addView(dashCard("Bekleyen", String.valueOf(db.pendingCount()), "Senkron kuyrugu", ORANGE, "sync"));
+        page.addView(row2);
+
+        LinearLayout quick = new LinearLayout(this);
+        quick.setOrientation(LinearLayout.VERTICAL);
+        quick.setPadding(dp(16), dp(16), dp(16), dp(16));
+        quick.setBackground(round(Color.WHITE, dp(18), BORDER));
+        LinearLayout.LayoutParams quickLp = new LinearLayout.LayoutParams(-1, -2);
+        quickLp.setMargins(0, dp(14), 0, 0);
+        page.addView(quick, quickLp);
+        quick.addView(label("Hizli islemler", 17, TEXT, Typeface.BOLD));
+
+        Button addCustomer = primaryButton("+ Musteri ekle");
+        Button addService = outlineButton("+ Servis ekle");
+        Button sync = outlineButton("Senkronize et");
+        addQuickButton(quick, addCustomer);
+        addQuickButton(quick, addService);
+        addQuickButton(quick, sync);
+        addCustomer.setOnClickListener(v -> { module = "musteri"; searchQuery = ""; showHome(); customerDialog(); });
+        addService.setOnClickListener(v -> { module = "servis"; searchQuery = ""; showHome(); showAddDialog(); });
+        sync.setOnClickListener(v -> doSync());
+        return scroll;
+    }
+
+    private LinearLayout dashRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(10), 0, 0);
+        row.setLayoutParams(lp);
+        return row;
+    }
+
+    private TextView dashCard(String name, String value, String sub, int color, String target) {
+        TextView v = label(value + "\n" + name + "\n" + sub, 13, Color.WHITE, Typeface.BOLD);
+        v.setGravity(Gravity.CENTER);
+        v.setLines(3);
+        v.setBackground(round(color, dp(18), color));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(118), 1);
+        lp.setMargins(dp(4), 0, dp(4), 0);
+        v.setLayoutParams(lp);
+        if (!"sync".equals(target)) v.setOnClickListener(x -> { module = target; searchQuery = ""; showHome(); });
+        return v;
+    }
+
+    private void addQuickButton(LinearLayout parent, Button button) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(50));
+        lp.setMargins(0, dp(10), 0, 0);
+        parent.addView(button, lp);
+    }
+
+    private View searchBar() {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setPadding(dp(12), dp(8), dp(12), dp(4));
+        wrap.setBackgroundColor(BG);
+        EditText search = authField("Ara: ad, telefon, urun, not...");
+        search.setText(searchQuery);
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                searchQuery = s.toString();
+                if (list != null) refreshList();
+            }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        wrap.addView(search, new LinearLayout.LayoutParams(-1, dp(50)));
+        return wrap;
+    }
+
+    private View bottomNav() {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setPadding(dp(8), dp(7), dp(8), dp(7));
+        nav.setBackgroundColor(Color.WHITE);
+        String[][] items = {{"dashboard","Ana"},{"musteri","Musteri"},{"servis","Servis"},{"satis","Satis"},{"stok","Stok"}};
+        for (String[] it : items) {
+            Button b = tabButton(it[1], module.equals(it[0]));
+            b.setOnClickListener(v -> {
+                module = it[0];
+                searchQuery = "";
+                adapter = null;
+                showHome();
+            });
+            nav.addView(b, new LinearLayout.LayoutParams(0, dp(54), 1));
+        }
+        return nav;
+    }
+
+    private TextView emptyState() {
+        TextView v = label("Henuz kayit yok", 14, MUTED, Typeface.BOLD);
+        v.setGravity(Gravity.CENTER);
+        v.setLines(3);
+        v.setBackgroundColor(BG);
         return v;
     }
 
@@ -325,23 +450,47 @@ public class MainActivity extends Activity {
 
     private void refreshList() {
         if (listCursor != null) listCursor.close();
-        listCursor = db.visible(module);
+        listCursor = db.visible(module, searchQuery);
         adapter = new RecordAdapter(this, listCursor);
         list.setAdapter(adapter);
         if (title != null) title.setText(moduleTitle());
         if (subtitle != null) subtitle.setText(headerStatusText());
+        if (emptyState != null) emptyState.setText("Henuz kayit yok\n+ Yeni Kayit ile baslayin veya arama filtresini temizleyin.");
     }
 
     private void showDetails(long rowId) {
         String name = db.titleByRowId(module, rowId);
         String detail = db.detailByRowId(module, rowId);
-        new AlertDialog.Builder(this)
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
             .setTitle(name.isEmpty() ? moduleTitle() : name)
-            .setMessage(detail.isEmpty() ? "Detay bulunamadı." : detail)
-            .setNegativeButton("Kapat", null)
-            .setPositiveButton("Sil", (d, w) -> {
+            .setMessage(detail.isEmpty() ? "Detay bulunamadi." : detail)
+            .setNegativeButton("Kapat", null);
+        if ("musteri".equals(module)) {
+            String[] contact = db.customerContactByRowId(rowId);
+            builder.setNeutralButton("Ara", (d, w) -> openDial(contact[0]));
+            builder.setPositiveButton("Aksiyonlar", (d, w) -> showCustomerActions(rowId));
+        } else {
+            builder.setPositiveButton("Sil", (d, w) -> {
                 db.softDelete(module, rowId);
                 refreshList();
+            });
+        }
+        builder.show();
+    }
+
+    private void showCustomerActions(long rowId) {
+        String[] contact = db.customerContactByRowId(rowId);
+        String[] items = {"Telefonla ara", "WhatsApp ac", "Haritada goster", "Kaydi sil"};
+        new AlertDialog.Builder(this)
+            .setTitle("Musteri aksiyonlari")
+            .setItems(items, (d, which) -> {
+                if (which == 0) openDial(contact[0]);
+                if (which == 1) openWhatsApp(contact[0]);
+                if (which == 2) openMap(contact[1], contact[2], contact[3]);
+                if (which == 3) {
+                    db.softDelete(module, rowId);
+                    refreshList();
+                }
             })
             .show();
     }
@@ -645,6 +794,7 @@ public class MainActivity extends Activity {
 
     private String moduleTitle() {
         switch (module) {
+            case "dashboard": return "Ana Sayfa";
             case "stok": return "Stok";
             case "servis": return "Servisler";
             case "satis": return "Satışlar";
@@ -667,6 +817,31 @@ public class MainActivity extends Activity {
         String last = db.getSetting("last_sync");
         if (last.isEmpty()) return "Yok";
         return last.length() >= 16 ? last.substring(11, 16) : last;
+    }
+
+    private void openDial(String phone) {
+        if (phone == null || phone.trim().isEmpty()) { toast("Telefon numarasi yok."); return; }
+        startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone.trim())));
+    }
+
+    private void openWhatsApp(String phone) {
+        if (phone == null || phone.trim().isEmpty()) { toast("Telefon numarasi yok."); return; }
+        String clean = phone.replaceAll("[^0-9+]", "");
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + clean.replace("+", "")));
+        startActivity(intent);
+    }
+
+    private void openMap(String lat, String lng, String address) {
+        Uri uri;
+        if (lat != null && !lat.isEmpty() && lng != null && !lng.isEmpty()) {
+            uri = Uri.parse("geo:" + lat + "," + lng + "?q=" + lat + "," + lng);
+        } else if (address != null && !address.trim().isEmpty()) {
+            uri = Uri.parse("geo:0,0?q=" + Uri.encode(address));
+        } else {
+            toast("Konum veya adres yok.");
+            return;
+        }
+        startActivity(new Intent(Intent.ACTION_VIEW, uri));
     }
 
     private TextView label(String text, int sp, int color, int style) {
@@ -696,6 +871,10 @@ public class MainActivity extends Activity {
         e.setHintTextColor(Color.rgb(148, 163, 184));
         e.setBackground(round(Color.rgb(248, 250, 252), dp(14), BORDER));
         return e;
+    }
+
+    private EditText authField(String hint) {
+        return authField(hint, false);
     }
 
     private void addField(LinearLayout parent, EditText field, int topMargin) {

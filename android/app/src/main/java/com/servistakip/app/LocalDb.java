@@ -140,6 +140,16 @@ class LocalDb extends SQLiteOpenHelper {
         }
     }
 
+    String[] customerContactByRowId(long rowId) {
+        Cursor c = getReadableDatabase().rawQuery("SELECT telefon, lat, lng, adres FROM musteriler WHERE rowid=?", new String[]{String.valueOf(rowId)});
+        try {
+            if (!c.moveToFirst()) return new String[]{"", "", "", ""};
+            return new String[]{safe(c, "telefon"), safe(c, "lat"), safe(c, "lng"), safe(c, "adres")};
+        } finally {
+            c.close();
+        }
+    }
+
     String titleByRowId(String module, long rowId) {
         Cursor c = visible(module);
         try {
@@ -355,27 +365,46 @@ class LocalDb extends SQLiteOpenHelper {
     }
 
     Cursor visible(String module) {
+        return visible(module, "");
+    }
+
+    Cursor visible(String module, String search) {
+        String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        String filter = q.isEmpty() ? "" : "%" + q + "%";
         String sql;
+        String[] args = q.isEmpty() ? null : new String[]{filter, filter, filter, filter};
         switch (module) {
             case "stok":
-                sql = "SELECT rowid AS _id, parca_adi AS title, ('Stok: ' || stok_miktari || ' - Fiyat: ' || birim_fiyat) AS subtitle, synced_at FROM parcalar WHERE deleted_at IS NULL ORDER BY updated_at DESC, created_at DESC";
+                sql = "SELECT rowid AS _id, parca_adi AS title, ('Stok: ' || stok_miktari || ' - Fiyat: ' || birim_fiyat) AS subtitle, synced_at FROM parcalar WHERE deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(parca_adi) LIKE ? OR LOWER(marka) LIKE ? OR LOWER(tedarikci) LIKE ? OR CAST(stok_miktari AS TEXT) LIKE ?)") +
+                    " ORDER BY updated_at DESC, created_at DESC";
                 break;
             case "servis":
-                sql = "SELECT s.rowid AS _id, (m.ad || ' ' || m.soyad || ' - ' || s.servis_tipi) AS title, ('Tutar: ' || s.toplam_tutar || ' - ' || s.odeme_durumu) AS subtitle, s.synced_at FROM servisler s LEFT JOIN musteriler m ON m.uuid=s.musteri_uuid WHERE s.deleted_at IS NULL ORDER BY s.updated_at DESC, s.created_at DESC";
+                sql = "SELECT s.rowid AS _id, (m.ad || ' ' || m.soyad || ' - ' || s.servis_tipi) AS title, ('Tutar: ' || s.toplam_tutar || ' - ' || s.odeme_durumu) AS subtitle, s.synced_at FROM servisler s LEFT JOIN musteriler m ON m.uuid=s.musteri_uuid WHERE s.deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(m.ad) LIKE ? OR LOWER(m.soyad) LIKE ? OR LOWER(s.servis_tipi) LIKE ? OR LOWER(s.notlar) LIKE ?)") +
+                    " ORDER BY s.updated_at DESC, s.created_at DESC";
                 break;
             case "satis":
-                sql = "SELECT st.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Satis') AS title, ('Tutar: ' || st.toplam_tutar || ' - ' || st.odeme_durumu) AS subtitle, st.synced_at FROM satislar st LEFT JOIN musteriler m ON m.uuid=st.musteri_uuid WHERE st.deleted_at IS NULL ORDER BY st.updated_at DESC, st.created_at DESC";
+                sql = "SELECT st.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Satis') AS title, ('Tutar: ' || st.toplam_tutar || ' - ' || st.odeme_durumu) AS subtitle, st.synced_at FROM satislar st LEFT JOIN musteriler m ON m.uuid=st.musteri_uuid WHERE st.deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(m.ad) LIKE ? OR LOWER(m.soyad) LIKE ? OR LOWER(st.notlar) LIKE ? OR LOWER(st.seri_no) LIKE ?)") +
+                    " ORDER BY st.updated_at DESC, st.created_at DESC";
                 break;
             case "tahsilat":
-                sql = "SELECT t.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Tahsilat') AS title, ('Tutar: ' || t.tutar || ' - ' || t.odeme_yontemi) AS subtitle, t.synced_at FROM tahsilatlar t LEFT JOIN musteriler m ON m.uuid=t.musteri_uuid WHERE t.deleted_at IS NULL ORDER BY t.created_at DESC";
+                sql = "SELECT t.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Tahsilat') AS title, ('Tutar: ' || t.tutar || ' - ' || t.odeme_yontemi) AS subtitle, t.synced_at FROM tahsilatlar t LEFT JOIN musteriler m ON m.uuid=t.musteri_uuid WHERE t.deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(m.ad) LIKE ? OR LOWER(m.soyad) LIKE ? OR LOWER(t.odeme_yontemi) LIKE ? OR LOWER(t.notlar) LIKE ?)") +
+                    " ORDER BY t.created_at DESC";
                 break;
             case "bakim":
-                sql = "SELECT pb.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Bakim') AS title, ('Periyot: ' || pb.periyot_ay || ' ay - Hatirlatma: ' || pb.hatirlatma_gun || ' gun') AS subtitle, pb.synced_at FROM periyodik_bakimlar pb LEFT JOIN musteriler m ON m.uuid=pb.musteri_uuid WHERE pb.deleted_at IS NULL ORDER BY pb.rowid DESC";
+                sql = "SELECT pb.rowid AS _id, (m.ad || ' ' || m.soyad || ' - Bakim') AS title, ('Periyot: ' || pb.periyot_ay || ' ay - Hatirlatma: ' || pb.hatirlatma_gun || ' gun') AS subtitle, pb.synced_at FROM periyodik_bakimlar pb LEFT JOIN musteriler m ON m.uuid=pb.musteri_uuid WHERE pb.deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(m.ad) LIKE ? OR LOWER(m.soyad) LIKE ? OR LOWER(pb.notlar) LIKE ? OR CAST(pb.periyot_ay AS TEXT) LIKE ?)") +
+                    " ORDER BY pb.rowid DESC";
                 break;
             default:
-                sql = "SELECT rowid AS _id, (ad || ' ' || soyad) AS title, (COALESCE(telefon,'') || CASE WHEN lat IS NOT NULL AND lng IS NOT NULL THEN ' - konum var' ELSE '' END) AS subtitle, synced_at FROM musteriler WHERE deleted_at IS NULL ORDER BY updated_at DESC, created_at DESC";
+                sql = "SELECT rowid AS _id, (ad || ' ' || soyad) AS title, (COALESCE(telefon,'') || CASE WHEN lat IS NOT NULL AND lng IS NOT NULL THEN ' - konum var' ELSE '' END) AS subtitle, synced_at FROM musteriler WHERE deleted_at IS NULL" +
+                    (q.isEmpty() ? "" : " AND (LOWER(ad) LIKE ? OR LOWER(soyad) LIKE ? OR LOWER(telefon) LIKE ? OR LOWER(adres) LIKE ?)") +
+                    " ORDER BY updated_at DESC, created_at DESC";
         }
-        return getReadableDatabase().rawQuery(sql, null);
+        return getReadableDatabase().rawQuery(sql, args);
     }
 
     JSONArray unsynced(String table) throws Exception {
