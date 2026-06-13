@@ -215,10 +215,10 @@ include __DIR__ . '/layout/header.php';
                             </div>
                         </template>
                         <template x-for="(k, i) in form.kalemler" :key="i">
-                            <div class="flex gap-2 items-start p-3 bg-slate-50 rounded-lg">
-                                <div class="flex-1">
+                            <div class="flex flex-wrap gap-2 items-start p-3 bg-slate-50 rounded-lg">
+                                <div style="flex:1 1 18rem;min-width:15rem;">
                                     <template x-if="k.stok_mod">
-                                        <select class="form-select" x-model="k.parca_id" @change="setStokFiyat(k)">
+                                        <select class="form-select" x-model="k.parca_id" @change="setStokFiyat(k)" :title="k.urun_adi || 'Stoktan ürün seçin'">
                                             <option value="">Stoktan seçin...</option>
                                             <template x-for="pk in stoklar" :key="pk.id">
                                                 <option :value="pk.id"
