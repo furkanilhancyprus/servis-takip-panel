@@ -72,6 +72,7 @@ function formatTarih(string $d): string {
 
 // Kalemler (her iki tip için normalize)
 $kalemler = [];
+$servisParcalari = [];
 if ($tip === 'satis') {
     foreach (($kayit['kalemler'] ?? []) as $k) {
         $kalemler[] = [
@@ -106,14 +107,21 @@ if ($tip === 'satis') {
             'toplam'   => (float)$i['tutar'],
         ];
     }
+    if (empty($kalemler) && $toplamTutar > 0) {
+        $kalemler[] = [
+            'aciklama' => 'Servis bedeli',
+            'miktar'   => 1,
+            'birim'    => 'İşlem',
+            'fiyat'    => $toplamTutar,
+            'toplam'   => $toplamTutar,
+        ];
+    }
     foreach (($kayit['parcalar'] ?? []) as $p) {
         $aciklama = ($p['marka'] ? $p['marka'].' ' : '') . $p['parca_adi'];
-        $kalemler[] = [
+        $servisParcalari[] = [
             'aciklama' => $aciklama,
             'miktar'   => $p['miktar'],
             'birim'    => 'Adet',
-            'fiyat'    => (float)$p['birim_fiyat'],
-            'toplam'   => $p['miktar'] * (float)$p['birim_fiyat'],
         ];
     }
 }
@@ -190,6 +198,12 @@ if ($tip === 'satis') {
         .items-table tbody td { padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: .875rem; }
         .items-table tbody td:last-child { text-align: right; font-weight: 600; }
         .items-table tfoot td { padding: .5rem 1rem; font-size: .875rem; }
+        .section-title {
+            font-size: .8rem; font-weight: 700; color: #64748b;
+            text-transform: uppercase; letter-spacing: .08em;
+            margin: 0 0 .6rem;
+        }
+        .items-table + .section-title { margin-top: 1.25rem; }
 
         /* Toplamlar */
         .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 1.5rem; }
@@ -330,28 +344,72 @@ if ($tip === 'satis') {
         </div>
 
         <!-- Kalemler -->
-        <table class="items-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Açıklama</th>
-                    <th>Miktar</th>
-                    <th>Birim Fiyat</th>
-                    <th>Tutar</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($kalemler as $i => $k): ?>
+        <?php if ($tip === 'servis'): ?>
+            <h4 class="section-title">Yapılan İşlem ve Fiyatı</h4>
+            <table class="items-table">
+                <thead>
                     <tr>
-                        <td style="color:#94a3b8; font-size:.8rem"><?= $i + 1 ?></td>
-                        <td><?= htmlspecialchars($k['aciklama']) ?></td>
-                        <td><?= htmlspecialchars($k['miktar']) ?> <?= htmlspecialchars($k['birim']) ?></td>
-                        <td><?= paraBicimi($k['fiyat'], $paraBirimi) ?></td>
-                        <td><?= paraBicimi($k['toplam'], $paraBirimi) ?></td>
+                        <th>#</th>
+                        <th>Yapılan İşlem</th>
+                        <th style="text-align:right">Fiyat</th>
                     </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php foreach ($kalemler as $i => $k): ?>
+                        <tr>
+                            <td style="color:#94a3b8; font-size:.8rem"><?= $i + 1 ?></td>
+                            <td><?= htmlspecialchars($k['aciklama']) ?></td>
+                            <td><?= paraBicimi((float)$k['toplam'], $paraBirimi) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+
+            <?php if (!empty($servisParcalari)): ?>
+                <h4 class="section-title">Kullanılan Parçalar</h4>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Parça</th>
+                            <th style="text-align:right">Miktar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($servisParcalari as $i => $p): ?>
+                            <tr>
+                                <td style="color:#94a3b8; font-size:.8rem"><?= $i + 1 ?></td>
+                                <td><?= htmlspecialchars($p['aciklama']) ?></td>
+                                <td><?= htmlspecialchars($p['miktar']) ?> <?= htmlspecialchars($p['birim']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        <?php else: ?>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Açıklama</th>
+                        <th>Miktar</th>
+                        <th>Birim Fiyat</th>
+                        <th>Tutar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($kalemler as $i => $k): ?>
+                        <tr>
+                            <td style="color:#94a3b8; font-size:.8rem"><?= $i + 1 ?></td>
+                            <td><?= htmlspecialchars($k['aciklama']) ?></td>
+                            <td><?= htmlspecialchars($k['miktar']) ?> <?= htmlspecialchars($k['birim']) ?></td>
+                            <td><?= paraBicimi($k['fiyat'], $paraBirimi) ?></td>
+                            <td><?= paraBicimi($k['toplam'], $paraBirimi) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
 
         <!-- Toplamlar -->
         <div class="totals-wrap">
