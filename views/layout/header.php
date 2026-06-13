@@ -102,6 +102,17 @@
             background: #fff; transition: border-color .15s, box-shadow .15s;
             outline: none;
         }
+        .form-input.pl-9 { padding-left: 2.25rem; }
+        .relative > .fa-search.absolute { pointer-events: none; }
+        .form-select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 2.25rem;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right .75rem center;
+            background-size: 1rem;
+        }
         .form-input:focus, .form-select:focus, .form-textarea:focus {
             border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(37,99,235,.12);
