@@ -1,4 +1,21 @@
-﻿<?php
+<?php
+session_start();
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
+$stpLoggedIn = !empty($_SESSION['firma_id']);
+
+function stp_app_href(string $guestHref): string {
+    global $stpLoggedIn;
+    return $stpLoggedIn ? 'index.php' : $guestHref;
+}
+
+function stp_app_label(string $guestLabel): string {
+    global $stpLoggedIn;
+    return $stpLoggedIn ? 'Panele Git' : $guestLabel;
+}
+
 function stp_download_exists(string $relativePath): bool {
     return is_file(__DIR__ . '/' . ltrim($relativePath, '/'));
 }
@@ -94,9 +111,13 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
 
             <!-- CTA -->
             <div class="flex items-center gap-3">
-                <a href="giris.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Giriş Yap</a>
-                <a href="kayit.php?paket=ucretsiz" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
-                    Ücretsiz Başla
+                <?php if ($stpLoggedIn): ?>
+                    <a href="index.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Panel</a>
+                <?php else: ?>
+                    <a href="giris.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Giriş Yap</a>
+                <?php endif; ?>
+                <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                    <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
                 </a>
             </div>
         </div>
@@ -133,10 +154,10 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 </p>
 
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <a href="kayit.php?paket=ucretsiz"
+                    <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>"
                         class="inline-flex items-center justify-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-7 py-4 rounded-xl transition text-base shadow-lg shadow-blue-900/20">
                         <i class="fas fa-rocket"></i>
-                        Ücretsiz Başla
+                        <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
                     </a>
                     <a href="#indir"
                         class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-semibold px-7 py-4 rounded-xl transition text-base">
@@ -452,8 +473,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
         </div>
 
         <div class="text-center mt-12">
-            <a href="kayit.php?paket=ucretsiz" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-xl transition shadow-lg shadow-blue-200 text-base">
-                <i class="fas fa-rocket"></i> Hemen Başla — Ücretsiz
+            <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-xl transition shadow-lg shadow-blue-200 text-base">
+                <i class="fas fa-rocket"></i> <?= $stpLoggedIn ? 'Panele Git' : 'Hemen Başla — Ücretsiz' ?>
             </a>
         </div>
     </div>
@@ -488,8 +509,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Sistemi risksiz keşfetme</li>
                     <li class="flex items-center gap-2 text-sm text-slate-400"><i class="fas fa-times text-slate-300 w-4"></i>Gelişmiş senkron ve ekip özellikleri hariç</li>
                 </ul>
-                <a href="kayit.php?paket=ucretsiz" class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
-                    Ücretsiz Başla
+                <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
+                    <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
                 </a>
             </div>
 
@@ -508,8 +529,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Offline kullanım ve otomatik senkron</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Raporlar, stok ve tahsilat takibi</li>
                 </ul>
-                <a href="kayit.php?paket=standart" class="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition text-sm shadow-lg shadow-blue-200">
-                    Standart ile Başla
+                <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=standart')) ?>" class="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition text-sm shadow-lg shadow-blue-200">
+                    <?= $stpLoggedIn ? 'Panele Git' : 'Standart ile Başla' ?>
                 </a>
             </div>
 
@@ -710,9 +731,9 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
             Bugün kaydolun, dakikalar içinde kullanmaya başlayın.<br>Kredi kartı gerekmez.
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="kayit.php?paket=ucretsiz"
+            <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>"
                 class="inline-flex items-center justify-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold px-8 py-4 rounded-xl transition text-base shadow-xl">
-                <i class="fas fa-rocket"></i> Ücretsiz Başla
+                <i class="fas fa-rocket"></i> <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
             </a>
             <a href="#supportChat" data-chat-message="Merhaba, destek almak istiyorum."
                 class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-semibold px-8 py-4 rounded-xl transition text-base">
@@ -744,8 +765,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 <ul class="space-y-2 text-sm">
                     <li><a href="#ozellikler" class="hover:text-white transition">Özellikler</a></li>
                     <li><a href="#fiyatlar" class="hover:text-white transition">Fiyatlar</a></li>
-                    <li><a href="kayit.php?paket=ucretsiz" class="hover:text-white transition">Kayıt Ol</a></li>
-                    <li><a href="giris.php" class="hover:text-white transition">Giriş Yap</a></li>
+                    <li><a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="hover:text-white transition"><?= $stpLoggedIn ? 'Panel' : 'Kayıt Ol' ?></a></li>
+                    <li><a href="<?= $stpLoggedIn ? 'index.php' : 'giris.php' ?>" class="hover:text-white transition"><?= $stpLoggedIn ? 'Panele Git' : 'Giriş Yap' ?></a></li>
                 </ul>
             </div>
             <div>
