@@ -137,9 +137,9 @@ class Satis extends Model {
         // Cihazı müşteriye bağla
         if ($cihazId) {
             $this->db->execute("
-                INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi)
-                VALUES (?,?,?,?,?,?)
-            ", [$this->firmaId, $musteriId, $cihazId, $id, $seriNo, $tarih]);
+                INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi, uuid)
+                VALUES (?,?,?,?,?,?,?)
+            ", [$this->firmaId, $musteriId, $cihazId, $id, $seriNo, $tarih, $this->uuid()]);
         }
 
         $pdo->commit();

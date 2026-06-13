@@ -124,7 +124,7 @@ include __DIR__ . '/layout/header.php';
 
     <!-- ===== ADD/EDIT MODAL ===== -->
     <div x-show="showForm" x-cloak class="modal-backdrop" @click.self="closeForm()">
-        <div class="modal-box max-w-xl">
+        <div class="modal-box max-w-2xl">
             <div class="modal-header">
                 <h3 class="font-semibold text-slate-800" x-text="editId ? 'Müşteri Düzenle' : 'Yeni Müşteri'"></h3>
                 <button @click="closeForm()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
@@ -204,6 +204,43 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <label class="form-label">Notlar</label>
                     <textarea class="form-input" rows="2" x-model="form.notlar"></textarea>
+                </div>
+                <div x-show="!editId" class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" class="mt-1" x-model="form.mevcut_cihaz.aktif">
+                        <span>
+                            <span class="block font-semibold text-slate-800 text-sm">Müşteride önceden bulunan cihazı ekle</span>
+                            <span class="block text-xs text-slate-500 mt-0.5">Bu kayıt satış oluşturmaz, ciroya girmez; sadece müşteri cihaz listesine eklenir.</span>
+                        </span>
+                    </label>
+                    <div x-show="form.mevcut_cihaz.aktif" x-transition class="grid grid-cols-2 gap-4 mt-4">
+                        <div class="col-span-2">
+                            <label class="form-label">Cihaz adı / modeli</label>
+                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.cihaz_adi"
+                                   placeholder="Örn: Su arıtma cihazı, LG klima, kombi modeli...">
+                        </div>
+                        <div>
+                            <label class="form-label">Marka</label>
+                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.marka">
+                        </div>
+                        <div>
+                            <label class="form-label">Model</label>
+                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.model">
+                        </div>
+                        <div>
+                            <label class="form-label">Seri No</label>
+                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.seri_no">
+                        </div>
+                        <div>
+                            <label class="form-label">Kurulum / alış tarihi</label>
+                            <input type="date" class="form-input" x-model="form.mevcut_cihaz.kurulum_tarihi">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="form-label">Cihaz notu</label>
+                            <textarea class="form-input" rows="2" x-model="form.mevcut_cihaz.notlar"
+                                      placeholder="Örn: Yaklaşık 5 yıl önce alındı, garanti yok, periyodik bakım takip edilecek."></textarea>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" @click="closeForm()">İptal</button>
@@ -313,10 +350,47 @@ include __DIR__ . '/layout/header.php';
                     </div>
                 </div>
 
-                <!-- Satışlar & Cihazlar -->
+                <!-- Mevcut Cihazlar -->
                 <div>
                     <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
-                        Satışlar & Cihazlar
+                        Mevcut Cihazlar
+                        <span class="ml-2 bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full text-xs font-semibold"
+                              x-text="(detail?.cihazlar||[]).length"></span>
+                    </h4>
+                    <template x-if="!detail?.cihazlar || detail.cihazlar.length === 0">
+                        <div class="bg-slate-50 rounded-xl p-4 text-center text-sm text-slate-400">
+                            <i class="fas fa-microchip text-2xl mb-1 block text-slate-200"></i>
+                            Bu müşteriye kayıtlı cihaz yok.
+                        </div>
+                    </template>
+                    <template x-if="detail?.cihazlar && detail.cihazlar.length > 0">
+                        <div class="space-y-2">
+                            <template x-for="cihaz in detail.cihazlar" :key="cihaz.id">
+                                <div class="flex items-start justify-between gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                                        <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
+                                            <i class="fas fa-microchip text-indigo-600 text-xs"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="font-medium text-slate-800 text-sm"
+                                               x-text="[(cihaz.marka||''), (cihaz.model||''), (cihaz.cihaz_adi||'Cihaz')].filter(Boolean).join(' ')"></p>
+                                            <p class="text-xs text-slate-500 mt-0.5"
+                                               x-text="(cihaz.kurulum_tarihi ? 'Kurulum: '+cihaz.kurulum_tarihi.substring(0,10) : 'Kurulum tarihi yok') + (cihaz.seri_no ? ' · Seri: '+cihaz.seri_no : '')"></p>
+                                            <p class="text-xs text-slate-500 mt-0.5 truncate" x-show="cihaz.notlar" x-text="cihaz.notlar"></p>
+                                        </div>
+                                    </div>
+                                    <span class="badge" :class="cihaz.satis_id ? 'badge-green' : 'badge-blue'"
+                                          x-text="cihaz.satis_id ? 'Satıştan geldi' : 'Mevcut cihaz'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Satışlar -->
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                        Satışlar
                         <span class="ml-2 bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full text-xs font-semibold"
                               x-text="(detail?.satislar||[]).length"></span>
                     </h4>
@@ -458,6 +532,17 @@ include __DIR__ . '/layout/header.php';
 </div>
 
 <script>
+function emptyDeviceForm() {
+    return { aktif:false, cihaz_id:null, cihaz_adi:'', marka:'', model:'', seri_no:'', kurulum_tarihi:'', notlar:'' };
+}
+
+function emptyCustomerForm() {
+    return {
+        ad:'', soyad:'', telefon:'', email:'', adres:'', notlar:'', lat:null, lng:null,
+        mevcut_cihaz: emptyDeviceForm(),
+    };
+}
+
 function musterilerApp() {
     return {
         musteriler: [], stats: {}, loading: false, search: '',
@@ -468,7 +553,7 @@ function musterilerApp() {
         _formMap: null, _formMarker: null,
         _detailMap: null,
         defaultMapCenter: [35.1856, 33.3823],
-        form: { ad:'', soyad:'', telefon:'', email:'', adres:'', notlar:'', lat:null, lng:null },
+        form: emptyCustomerForm(),
 
         async init() {
             await Promise.all([this.loadMusteriler(), this.loadStats()]);
@@ -492,7 +577,7 @@ function musterilerApp() {
             this.editId = null;
             this.showMap = false;
             this.mapSearch = '';
-            this.form = { ad:'', soyad:'', telefon:'', email:'', adres:'', notlar:'', lat:null, lng:null };
+            this.form = emptyCustomerForm();
             this.showForm = true;
         },
 
@@ -504,6 +589,7 @@ function musterilerApp() {
                 ad: m.ad, soyad: m.soyad, telefon: m.telefon||'',
                 email: m.email||'', adres: m.adres||'', notlar: m.notlar||'',
                 lat: m.lat || null, lng: m.lng || null,
+                mevcut_cihaz: emptyDeviceForm(),
             };
             this.showForm = true;
         },

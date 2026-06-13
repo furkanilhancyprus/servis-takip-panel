@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/Model.php';
+require_once __DIR__ . '/Cihaz.php';
 
 class Musteri extends Model {
 
@@ -104,19 +105,31 @@ class Musteri extends Model {
             );
         }
 
+        $musteri['cihazlar'] = $this->db->fetchAll("
+            SELECT mc.id, mc.satis_id, mc.seri_no, mc.kurulum_tarihi, mc.notlar,
+                   c.cihaz_adi, c.marka, c.model,
+                   s.satis_tarihi, s.toplam_tutar AS satis_tutari
+            FROM musteri_cihazlari mc
+            LEFT JOIN cihazlar c ON c.id = mc.cihaz_id AND c.deleted_at IS NULL
+            LEFT JOIN satislar s ON s.id = mc.satis_id AND s.deleted_at IS NULL
+            WHERE mc.musteri_id = ? AND mc.firma_id = ? AND mc.deleted_at IS NULL
+            ORDER BY COALESCE(mc.kurulum_tarihi, mc.created_at) DESC
+        ", [$id, $this->firmaId]);
+
         return $musteri;
     }
 
     public function create(array $data): int {
         $id = $this->db->execute("
-            INSERT INTO musteriler (firma_id, ad, soyad, telefon, email, adres, notlar, lat, lng)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO musteriler (firma_id, ad, soyad, telefon, email, adres, notlar, lat, lng, uuid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ", [
             $this->firmaId,
             $data['ad'], $data['soyad'], $data['telefon'] ?? null,
             $data['email'] ?? null, $data['adres'] ?? null, $data['notlar'] ?? null,
             isset($data['lat']) && $data['lat'] !== '' ? (float)$data['lat'] : null,
             isset($data['lng']) && $data['lng'] !== '' ? (float)$data['lng'] : null,
+            $this->uuid(),
         ]);
 
         $periyot = $this->db->fetchColumn(
@@ -125,9 +138,14 @@ class Musteri extends Model {
         ) ?: 6;
 
         $this->db->execute(
-            "INSERT INTO periyodik_bakimlar (musteri_id, periyot_ay) VALUES (?, ?)",
-            [$id, $periyot]
+            "INSERT INTO periyodik_bakimlar (musteri_id, periyot_ay, uuid) VALUES (?, ?, ?)",
+            [$id, $periyot, $this->uuid()]
         );
+
+        $mevcutCihaz = $data['mevcut_cihaz'] ?? null;
+        if (is_array($mevcutCihaz) && !empty($mevcutCihaz['aktif'])) {
+            (new Cihaz())->linkExistingToMusteri($id, $mevcutCihaz);
+        }
 
         return $id;
     }

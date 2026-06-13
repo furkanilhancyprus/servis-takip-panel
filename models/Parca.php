@@ -12,14 +12,15 @@ class Parca extends Model {
 
     public function create(array $data): int {
         $id = $this->db->execute("
-            INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz)
-            VALUES (?,?,?,?,?,?,?,?)
+            INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz, uuid)
+            VALUES (?,?,?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $data['parca_adi'], $data['marka'] ?? null,
             $data['birim_fiyat'] ?? 0, $data['stok_miktari'] ?? 0,
             $data['kritik_stok_seviyesi'] ?? 5, $data['tedarikci'] ?? null,
             isset($data['is_cihaz']) ? (int)(bool)$data['is_cihaz'] : 0,
+            $this->uuid(),
         ]);
 
         if (!empty($data['is_cihaz'])) {
@@ -90,8 +91,8 @@ class Parca extends Model {
         }
 
         $this->db->execute("
-            INSERT INTO cihazlar (firma_id, parca_id, cihaz_adi, marka, varsayilan_fiyat, aciklama)
-            VALUES (?,?,?,?,?,?)
+            INSERT INTO cihazlar (firma_id, parca_id, cihaz_adi, marka, varsayilan_fiyat, aciklama, uuid)
+            VALUES (?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $parcaId,
@@ -99,6 +100,7 @@ class Parca extends Model {
             $data['marka'] ?? null,
             $data['birim_fiyat'] ?? 0,
             $data['tedarikci'] ?? null,
+            $this->uuid(),
         ]);
     }
 

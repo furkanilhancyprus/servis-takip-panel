@@ -26,19 +26,20 @@ class Cihaz extends Model {
 
     public function create(array $data): int {
         $parcaId = $this->db->execute("
-            INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz)
-            VALUES (?,?,?,?,0,1,?,1)
+            INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz, uuid)
+            VALUES (?,?,?,?,0,1,?,1,?)
         ", [
             $this->firmaId,
             $data['cihaz_adi'],
             $data['marka'] ?? null,
             $data['varsayilan_fiyat'] ?? 0,
             $data['aciklama'] ?? null,
+            $this->uuid(),
         ]);
 
         return $this->db->execute("
-            INSERT INTO cihazlar (firma_id, parca_id, cihaz_adi, marka, model, varsayilan_fiyat, aciklama)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO cihazlar (firma_id, parca_id, cihaz_adi, marka, model, varsayilan_fiyat, aciklama, uuid)
+            VALUES (?,?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $parcaId,
@@ -47,6 +48,7 @@ class Cihaz extends Model {
             $data['model']            ?? null,
             $data['varsayilan_fiyat'] ?? 0,
             $data['aciklama']         ?? null,
+            $this->uuid(),
         ]);
     }
 
@@ -81,14 +83,15 @@ class Cihaz extends Model {
             ]);
         } else {
             $parcaId = $this->db->execute("
-                INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz)
-                VALUES (?,?,?,?,0,1,?,1)
+                INSERT INTO parcalar (firma_id, parca_adi, marka, birim_fiyat, stok_miktari, kritik_stok_seviyesi, tedarikci, is_cihaz, uuid)
+                VALUES (?,?,?,?,0,1,?,1,?)
             ", [
                 $this->firmaId,
                 $data['cihaz_adi'],
                 $data['marka'] ?? null,
                 $data['varsayilan_fiyat'] ?? 0,
                 $data['aciklama'] ?? null,
+                $this->uuid(),
             ]);
             $this->db->query("UPDATE cihazlar SET parca_id=?, synced_at=NULL WHERE id=? AND firma_id=?", [$parcaId, $id, $this->firmaId]);
         }
@@ -122,11 +125,46 @@ class Cihaz extends Model {
         ", [$musteriId, $this->firmaId]);
     }
 
+    public function linkExistingToMusteri(int $musteriId, array $data): ?int {
+        $this->requireMusteri($musteriId);
+
+        $cihazId = !empty($data['cihaz_id']) ? (int)$data['cihaz_id'] : 0;
+        if ($cihazId > 0) {
+            $this->requireCihaz($cihazId);
+        } else {
+            $cihazAdi = trim((string)($data['cihaz_adi'] ?? ''));
+            if ($cihazAdi === '') {
+                return null;
+            }
+            $cihazId = $this->create([
+                'cihaz_adi' => $cihazAdi,
+                'marka' => trim((string)($data['marka'] ?? '')),
+                'model' => trim((string)($data['model'] ?? '')),
+                'varsayilan_fiyat' => 0,
+                'aciklama' => 'Mevcut musteri cihazi olarak eklendi.',
+            ]);
+        }
+
+        return $this->db->execute("
+            INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi, notlar, uuid, synced_at)
+            VALUES (?,?,?,?,?,?,?,?,NULL)
+        ", [
+            $this->firmaId,
+            $musteriId,
+            $cihazId,
+            null,
+            trim((string)($data['seri_no'] ?? '')) ?: null,
+            trim((string)($data['kurulum_tarihi'] ?? '')) ?: null,
+            trim((string)($data['notlar'] ?? '')) ?: 'Satis disi mevcut cihaz kaydi.',
+            $this->uuid(),
+        ]);
+    }
+
     // Satışa cihaz bağla
     public function linkToSatis(int $musteriId, int $satisId, ?int $cihazId, array $data = []): int {
         return $this->db->execute("
-            INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi, notlar)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi, notlar, uuid)
+            VALUES (?,?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $musteriId,
@@ -135,6 +173,7 @@ class Cihaz extends Model {
             $data['seri_no']         ?? null,
             $data['kurulum_tarihi']  ?? date('Y-m-d'),
             $data['notlar']          ?? null,
+            $this->uuid(),
         ]);
     }
 }
