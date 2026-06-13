@@ -253,8 +253,8 @@ include __DIR__ . '/layout/header.php';
                                         <input type="number" class="form-input w-20 text-center text-slate-400" min="1"
                                                x-model="p.miktar" @input="calcTotal()" title="Adet">
                                         <div class="w-28 text-right pr-1">
-                                            <span class="text-slate-300 text-sm"
-                                                  x-text="formatCurrency(p.birim_fiyat)"></span>
+                                            <span class="text-slate-400 text-xs"
+                                                  x-text="'Maliyet: ' + formatCurrency(p.birim_fiyat * (parseInt(p.miktar)||1))"></span>
                                         </div>
                                     </div>
                                 </template>
@@ -346,12 +346,12 @@ include __DIR__ . '/layout/header.php';
 
                 <!-- Parçalar -->
                 <div x-show="detail?.parcalar?.length">
-                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Kullanılan Parçalar</p>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Kullanılan Parçalar / Maliyet</p>
                     <div class="space-y-1.5">
                         <template x-for="pr in (detail?.parcalar || [])" :key="pr.id">
                             <div class="flex justify-between items-center bg-slate-50 rounded-lg px-3 py-2 text-sm">
                                 <span x-text="`${pr.parca_adi} × ${pr.miktar}`"></span>
-                                <span class="font-semibold text-slate-700" x-text="formatCurrency(pr.birim_fiyat * pr.miktar)"></span>
+                                <span class="font-semibold text-slate-700" x-text="'Maliyet: ' + formatCurrency(pr.birim_fiyat * pr.miktar)"></span>
                             </div>
                         </template>
                     </div>
@@ -628,11 +628,11 @@ function servislerApp() {
             if (!this.form.musteri_id) { showToast('Lütfen müşteri seçiniz.', 'error'); return; }
             if (!this.form.servis_tipi) { showToast('Lütfen servis tipi seçiniz.', 'error'); return; }
             this.calcTotal();
-            // Dahil parçaları birim_fiyat=0 ile gönder (stok düşülür, ücrete eklenmez)
+            // Dahil parçalar stoktan düşer ve maliyet olarak saklanır; servis toplamına eklenmez.
             const payload = {
                 ...this.form,
                 islemler: this.normalizeIslemler(),
-                parcalar: this.form.parcalar.map(p => p.dahil ? { ...p, birim_fiyat: 0 } : p),
+                parcalar: this.form.parcalar,
             };
             this.saving = true;
             try {
