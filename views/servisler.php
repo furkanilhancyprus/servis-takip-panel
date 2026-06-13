@@ -204,16 +204,18 @@ include __DIR__ . '/layout/header.php';
                     <div class="space-y-2">
                         <template x-for="(islem, i) in form.islemler" :key="i">
                             <div class="flex gap-2">
-                                <div class="relative flex-1">
-                                    <input type="text" class="form-input" placeholder="İşlem adı"
-                                           x-model="islem.islem"
-                                           list="standartIslemler"
-                                           @change="applyStandartFiyat(islem)">
-                                    <datalist id="standartIslemler">
+                                <div class="flex-1">
+                                    <select class="form-select" x-model="islem.islem" @change="applyStandartFiyat(islem)">
+                                        <option value="">İşlem seçiniz...</option>
                                         <template x-for="si in standartIslemler" :key="si.id">
-                                            <option :value="si.islem_adi" :data-fiyat="si.varsayilan_fiyat"></option>
+                                            <option :value="si.islem_adi" x-text="si.islem_adi"></option>
                                         </template>
-                                    </datalist>
+                                        <option value="__manual">Manuel işlem...</option>
+                                    </select>
+                                    <input x-show="islem.islem === '__manual'" x-transition
+                                           type="text" class="form-input mt-2"
+                                           placeholder="Manuel işlem adı"
+                                           x-model="islem.manuel_islem">
                                 </div>
                                 <input type="number" class="form-input w-32" placeholder="Tutar (₺)" step="0.01" min="0"
                                        x-model="islem.tutar" @input="calcTotal()">
@@ -607,6 +609,12 @@ function servislerApp() {
             this.calcTotal();
         },
 
+        normalizeIslemler() {
+            return this.form.islemler
+                .map(i => ({ ...i, islem: i.islem === '__manual' ? (i.manuel_islem || '').trim() : i.islem }))
+                .filter(i => i.islem);
+        },
+
         calcTotal() {
             const islemToplam = this.form.islemler.reduce((s, i) => s + (parseFloat(i.tutar) || 0), 0);
             // Dahil parçalar ücrete eklenmez, sadece stoktan düşer
@@ -623,6 +631,7 @@ function servislerApp() {
             // Dahil parçaları birim_fiyat=0 ile gönder (stok düşülür, ücrete eklenmez)
             const payload = {
                 ...this.form,
+                islemler: this.normalizeIslemler(),
                 parcalar: this.form.parcalar.map(p => p.dahil ? { ...p, birim_fiyat: 0 } : p),
             };
             this.saving = true;
