@@ -215,17 +215,20 @@ include __DIR__ . '/layout/header.php';
                     </label>
                     <div x-show="form.mevcut_cihaz.aktif" x-transition class="grid grid-cols-2 gap-4 mt-4">
                         <div class="col-span-2">
-                            <label class="form-label">Cihaz adı / modeli</label>
-                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.cihaz_adi"
-                                   placeholder="Örn: Su arıtma cihazı, LG klima, kombi modeli...">
-                        </div>
-                        <div>
-                            <label class="form-label">Marka</label>
-                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.marka">
-                        </div>
-                        <div>
-                            <label class="form-label">Model</label>
-                            <input type="text" class="form-input" x-model="form.mevcut_cihaz.model">
+                            <label class="form-label">Cihaz seçimi</label>
+                            <select class="form-select" x-model="form.mevcut_cihaz.cihaz_id" @change="syncExistingDeviceFields()">
+                                <option value="">Katalogdan cihaz seçin...</option>
+                                <template x-for="c in cihazlar" :key="c.id">
+                                    <option :value="c.id" x-text="[(c.marka||''), (c.model||''), (c.cihaz_adi||'')].filter(Boolean).join(' ')"></option>
+                                </template>
+                            </select>
+                            <p class="text-xs text-slate-400 mt-1" x-show="cihazlar.length === 0">
+                                Önce Ayarlar > Ürün / Cihaz Kataloğu bölümünden cihaz tanımlayın.
+                            </p>
+                            <p class="text-xs text-blue-600 mt-1" x-show="selectedExistingDevice()">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                <span x-text="selectedExistingDeviceLabel()"></span>
+                            </p>
                         </div>
                         <div>
                             <label class="form-label">Seri No</label>
@@ -545,7 +548,7 @@ function emptyCustomerForm() {
 
 function musterilerApp() {
     return {
-        musteriler: [], stats: {}, loading: false, search: '',
+        musteriler: [], cihazlar: [], stats: {}, loading: false, search: '',
         showForm: false, showDetail: false, editId: null, saving: false,
         detail: null, showDetailMap: false,
         // Map state
@@ -556,7 +559,7 @@ function musterilerApp() {
         form: emptyCustomerForm(),
 
         async init() {
-            await Promise.all([this.loadMusteriler(), this.loadStats()]);
+            await Promise.all([this.loadMusteriler(), this.loadStats(), this.loadCihazlar()]);
             this.$watch('showForm', val => { if (!val) this._destroyFormMap(); });
             this.$watch('showDetail', val => { if (!val) { this._destroyDetailMap(); this.showDetailMap = false; } });
         },
@@ -571,6 +574,26 @@ function musterilerApp() {
 
         async loadStats() {
             try { this.stats = await api('api/musteriler.php?stats=1'); } catch(e) {}
+        },
+
+        async loadCihazlar() {
+            try { this.cihazlar = await api('api/cihazlar.php'); } catch(e) { this.cihazlar = []; }
+        },
+
+        selectedExistingDevice() {
+            return this.cihazlar.find(c => String(c.id) === String(this.form.mevcut_cihaz.cihaz_id || '')) || null;
+        },
+
+        selectedExistingDeviceLabel() {
+            const c = this.selectedExistingDevice();
+            return c ? [(c.marka||''), (c.model||''), (c.cihaz_adi||'')].filter(Boolean).join(' ') : '';
+        },
+
+        syncExistingDeviceFields() {
+            const c = this.selectedExistingDevice();
+            this.form.mevcut_cihaz.cihaz_adi = c ? (c.cihaz_adi || '') : '';
+            this.form.mevcut_cihaz.marka = c ? (c.marka || '') : '';
+            this.form.mevcut_cihaz.model = c ? (c.model || '') : '';
         },
 
         openAddModal() {
@@ -759,6 +782,10 @@ function musterilerApp() {
 
         // ── CRUD ───────────────────────────────────────────────────
         async saveMusteri() {
+            if (!this.editId && this.form.mevcut_cihaz.aktif && !this.form.mevcut_cihaz.cihaz_id) {
+                showToast('Mevcut cihaz eklemek için katalogdan cihaz seçin.', 'error');
+                return;
+            }
             this.saving = true;
             try {
                 if (this.editId) {

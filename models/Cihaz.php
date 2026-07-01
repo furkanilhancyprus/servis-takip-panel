@@ -129,21 +129,10 @@ class Cihaz extends Model {
         $this->requireMusteri($musteriId);
 
         $cihazId = !empty($data['cihaz_id']) ? (int)$data['cihaz_id'] : 0;
-        if ($cihazId > 0) {
-            $this->requireCihaz($cihazId);
-        } else {
-            $cihazAdi = trim((string)($data['cihaz_adi'] ?? ''));
-            if ($cihazAdi === '') {
-                return null;
-            }
-            $cihazId = $this->create([
-                'cihaz_adi' => $cihazAdi,
-                'marka' => trim((string)($data['marka'] ?? '')),
-                'model' => trim((string)($data['model'] ?? '')),
-                'varsayilan_fiyat' => 0,
-                'aciklama' => 'Mevcut musteri cihazi olarak eklendi.',
-            ]);
+        if ($cihazId <= 0) {
+            throw new InvalidArgumentException('Mevcut cihaz katalogdan seçilmelidir.');
         }
+        $this->requireCihaz($cihazId);
 
         return $this->db->execute("
             INSERT INTO musteri_cihazlari (firma_id, musteri_id, cihaz_id, satis_id, seri_no, kurulum_tarihi, notlar, uuid, synced_at)
