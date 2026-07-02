@@ -162,13 +162,218 @@
         .odeme-odenmedi { background: #fee2e2; color: #dc2626; }
         .odeme-kismi    { background: #fef9c3; color: #a16207; }
         .odeme-odendi   { background: #dcfce7; color: #15803d; }
+
+        .mobile-bottom-nav { display: none; }
+
+        @media (max-width: 768px) {
+            body { background: #f8fafc; }
+
+            .app-shell {
+                height: auto;
+                min-height: 100vh;
+                overflow: visible;
+                display: block;
+            }
+
+            .desktop-sidebar { display: none !important; }
+
+            .app-main {
+                min-height: 100vh;
+                overflow: visible;
+                padding-bottom: 5.25rem;
+            }
+
+            .page-header {
+                padding: .75rem 1rem;
+                gap: .75rem;
+                align-items: flex-start;
+            }
+            .page-header h1 { font-size: 1rem; line-height: 1.25rem; }
+            .page-header > div:first-child { min-width: 0; flex: 1; }
+            .page-header > div:last-child { gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }
+            .page-header .rounded-lg.px-3 { padding-left: .5rem; padding-right: .5rem; }
+
+            main.flex-1 {
+                padding: .875rem !important;
+                overflow: visible;
+            }
+
+            .stat-card {
+                padding: .875rem;
+                border-radius: .75rem;
+            }
+            .stat-card:hover { transform: none; }
+            .stat-card p.text-3xl { font-size: 1.5rem; line-height: 2rem; }
+            .stat-card p.text-2xl { font-size: 1.25rem; line-height: 1.75rem; }
+
+            .card {
+                border-radius: .75rem;
+                box-shadow: 0 1px 2px rgba(0,0,0,.03);
+            }
+            .card.p-6 { padding: 1rem !important; }
+
+            .grid.grid-cols-2,
+            .grid.grid-cols-3,
+            .grid.grid-cols-4,
+            .grid.md\:grid-cols-2,
+            .grid.md\:grid-cols-4,
+            .grid.lg\:grid-cols-2,
+            .grid.lg\:grid-cols-3,
+            .grid.xl\:grid-cols-4 {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            .modal-body .grid.grid-cols-2,
+            .modal-body .grid.grid-cols-3,
+            form .grid.grid-cols-2,
+            form .grid.grid-cols-3 {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            .flex.flex-wrap.items-center.justify-between,
+            .flex.flex-wrap.items-start.justify-between {
+                align-items: stretch;
+            }
+
+            .form-input,
+            .form-select,
+            .form-textarea {
+                min-height: 2.6rem;
+                font-size: 16px;
+            }
+
+            .w-24, .w-28, .w-32, .w-36, .w-40, .w-44, .w-48, .w-52, .w-56, .w-72 {
+                width: 100% !important;
+            }
+
+            .btn {
+                min-height: 2.5rem;
+                justify-content: center;
+                white-space: nowrap;
+            }
+            .btn-icon {
+                width: 2.5rem;
+                min-width: 2.5rem;
+                padding: .5rem;
+            }
+            .btn-sm { min-height: 2.25rem; }
+
+            .modal-backdrop {
+                align-items: flex-end;
+                padding: .5rem;
+            }
+            .modal-box {
+                max-width: 100% !important;
+                max-height: 94vh !important;
+                border-radius: 1rem 1rem .75rem .75rem;
+            }
+            .modal-header {
+                padding: 1rem;
+                position: sticky;
+                top: 0;
+                background: #fff;
+                z-index: 2;
+            }
+            .modal-body { padding: 1rem; }
+            .modal-footer {
+                padding: .875rem 1rem;
+                position: sticky;
+                bottom: 0;
+                background: #fff;
+                flex-direction: column-reverse;
+            }
+            .modal-footer .btn { width: 100%; }
+
+            .modal-body .flex.gap-2,
+            form .flex.gap-2 {
+                flex-wrap: wrap;
+            }
+            .modal-body .flex.gap-2 > .flex-1,
+            form .flex.gap-2 > .flex-1 {
+                flex-basis: 100%;
+            }
+            .modal-body .flex.gap-2 > input,
+            .modal-body .flex.gap-2 > select,
+            form .flex.gap-2 > input,
+            form .flex.gap-2 > select {
+                flex: 1 1 8rem;
+            }
+
+            .overflow-x-auto {
+                margin-left: -.875rem;
+                margin-right: -.875rem;
+                padding-left: .875rem;
+                padding-right: .875rem;
+                -webkit-overflow-scrolling: touch;
+            }
+            .data-table {
+                min-width: 720px;
+            }
+            .data-table th,
+            .data-table td {
+                padding: .625rem .75rem;
+                font-size: .8rem;
+            }
+
+            #formMap { height: 240px !important; }
+            #detailMap { height: 220px !important; }
+
+            .toast-container {
+                left: .75rem;
+                right: .75rem;
+                bottom: 5rem;
+            }
+            .toast {
+                min-width: 0;
+                width: 100%;
+                padding: .75rem .875rem;
+            }
+
+            .mobile-bottom-nav {
+                position: fixed;
+                left: .75rem;
+                right: .75rem;
+                bottom: .75rem;
+                z-index: 60;
+                display: flex;
+                gap: .25rem;
+                background: rgba(15, 23, 42, .96);
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 1rem;
+                padding: .35rem;
+                box-shadow: 0 18px 45px rgba(15,23,42,.22);
+                backdrop-filter: blur(12px);
+                overflow-x: auto;
+                scrollbar-width: none;
+            }
+            .mobile-bottom-nav::-webkit-scrollbar { display: none; }
+            .mobile-bottom-nav a {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: .18rem;
+                flex: 0 0 4rem;
+                min-height: 3.15rem;
+                border-radius: .75rem;
+                color: #94a3b8;
+                font-size: .66rem;
+                font-weight: 600;
+                text-decoration: none;
+            }
+            .mobile-bottom-nav a i { font-size: .95rem; }
+            .mobile-bottom-nav a.active {
+                background: #2563eb;
+                color: #fff;
+            }
+        }
     </style>
 </head>
 <body>
-<div class="flex h-screen overflow-hidden">
+<div class="app-shell flex h-screen overflow-hidden">
 
     <!-- ========= SIDEBAR ========= -->
-    <aside class="w-60 flex-shrink-0 flex flex-col" style="background:#0f172a; overflow-y:auto;">
+    <aside class="desktop-sidebar w-60 flex-shrink-0 flex flex-col" style="background:#0f172a; overflow-y:auto;">
 
         <!-- Logo -->
         <?php
@@ -279,8 +484,38 @@
         </div>
     </aside>
 
+    <nav class="mobile-bottom-nav" aria-label="Mobil menü">
+        <a href="?page=dashboard" class="<?= ($activePage ?? '') === 'dashboard' ? 'active' : '' ?>">
+            <i class="fas fa-chart-pie"></i><span>Panel</span>
+        </a>
+        <a href="?page=musteriler" class="<?= ($activePage ?? '') === 'musteriler' ? 'active' : '' ?>">
+            <i class="fas fa-users"></i><span>Müşteri</span>
+        </a>
+        <a href="?page=servisler" class="<?= ($activePage ?? '') === 'servisler' ? 'active' : '' ?>">
+            <i class="fas fa-wrench"></i><span>Servis</span>
+        </a>
+        <a href="?page=satislar" class="<?= ($activePage ?? '') === 'satislar' ? 'active' : '' ?>">
+            <i class="fas fa-cart-shopping"></i><span>Satış</span>
+        </a>
+        <a href="?page=tahsilatlar" class="<?= ($activePage ?? '') === 'tahsilatlar' ? 'active' : '' ?>">
+            <i class="fas fa-money-bill-wave"></i><span>Tahsilat</span>
+        </a>
+        <a href="?page=bakimlar" class="<?= ($activePage ?? '') === 'bakimlar' ? 'active' : '' ?>">
+            <i class="fas fa-calendar-check"></i><span>Bakım</span>
+        </a>
+        <a href="?page=stok" class="<?= ($activePage ?? '') === 'stok' ? 'active' : '' ?>">
+            <i class="fas fa-boxes-stacked"></i><span>Stok</span>
+        </a>
+        <a href="?page=raporlar" class="<?= ($activePage ?? '') === 'raporlar' ? 'active' : '' ?>">
+            <i class="fas fa-file-chart-column"></i><span>Rapor</span>
+        </a>
+        <a href="?page=ayarlar" class="<?= ($activePage ?? '') === 'ayarlar' ? 'active' : '' ?>">
+            <i class="fas fa-gear"></i><span>Ayar</span>
+        </a>
+    </nav>
+
     <!-- ========= MAIN CONTENT ========= -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="app-main flex-1 flex flex-col overflow-hidden">
 
         <!-- Page Header -->
         <header class="page-header flex items-center justify-between">

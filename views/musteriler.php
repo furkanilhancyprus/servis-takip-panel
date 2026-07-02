@@ -35,7 +35,7 @@ include __DIR__ . '/layout/header.php';
     <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div class="relative">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="text" placeholder="İsim, telefon veya e-posta ara..."
+            <input type="text" placeholder="İsim veya telefon ara..."
                    class="form-input pl-9 w-72"
                    x-model="search" @input.debounce.300ms="loadMusteriler()">
         </div>
@@ -52,7 +52,6 @@ include __DIR__ . '/layout/header.php';
                     <tr>
                         <th>Müşteri</th>
                         <th>Telefon</th>
-                        <th>E-posta</th>
                         <th>Bakım Durumu</th>
                         <th class="text-center">Servis</th>
                         <th>Son Servis</th>
@@ -61,12 +60,12 @@ include __DIR__ . '/layout/header.php';
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="7" class="text-center py-10 text-slate-400">
+                        <tr><td colspan="6" class="text-center py-10 text-slate-400">
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
                     <template x-if="!loading && musteriler.length === 0">
-                        <tr><td colspan="7" class="text-center py-10 text-slate-400">
+                        <tr><td colspan="6" class="text-center py-10 text-slate-400">
                             <i class="fas fa-users text-3xl mb-2 block text-slate-200"></i>
                             Müşteri bulunamadı
                         </td></tr>
@@ -91,7 +90,6 @@ include __DIR__ . '/layout/header.php';
                                 </div>
                             </td>
                             <td class="text-slate-600" x-text="m.telefon || '—'"></td>
-                            <td class="text-slate-500 text-sm" x-text="m.email || '—'"></td>
                             <td>
                                 <span class="badge"
                                       :class="{
@@ -140,15 +138,9 @@ include __DIR__ . '/layout/header.php';
                         <input type="text" class="form-input" x-model="form.soyad" required>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Telefon</label>
-                        <input type="tel" class="form-input" x-model="form.telefon">
-                    </div>
-                    <div>
-                        <label class="form-label">E-posta</label>
-                        <input type="email" class="form-input" x-model="form.email">
-                    </div>
+                <div>
+                    <label class="form-label">Telefon</label>
+                    <input type="tel" class="form-input" x-model="form.telefon">
                 </div>
 
                 <!-- Adres + Harita Toggle -->
@@ -205,11 +197,11 @@ include __DIR__ . '/layout/header.php';
                     <label class="form-label">Notlar</label>
                     <textarea class="form-input" rows="2" x-model="form.notlar"></textarea>
                 </div>
-                <div x-show="!editId" class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
                     <label class="flex items-start gap-3 cursor-pointer">
                         <input type="checkbox" class="mt-1" x-model="form.mevcut_cihaz.aktif">
                         <span>
-                            <span class="block font-semibold text-slate-800 text-sm">Müşteride önceden bulunan cihazı ekle</span>
+                            <span class="block font-semibold text-slate-800 text-sm" x-text="editId ? 'Müşteriye kayıtlı cihaz ekle' : 'Müşteride önceden bulunan cihazı ekle'"></span>
                             <span class="block text-xs text-slate-500 mt-0.5">Bu kayıt satış oluşturmaz, ciroya girmez; sadece müşteri cihaz listesine eklenir.</span>
                         </span>
                     </label>
@@ -282,10 +274,6 @@ include __DIR__ . '/layout/header.php';
                         <div class="bg-slate-50 rounded-lg p-3">
                             <p class="text-xs text-slate-400">Telefon</p>
                             <p class="font-medium text-slate-700 mt-0.5" x-text="detail?.telefon || '—'"></p>
-                        </div>
-                        <div class="bg-slate-50 rounded-lg p-3">
-                            <p class="text-xs text-slate-400">E-posta</p>
-                            <p class="font-medium text-slate-700 mt-0.5 text-sm" x-text="detail?.email || '—'"></p>
                         </div>
                         <div class="bg-slate-50 rounded-lg p-3" :class="detail?.lat ? '' : 'col-span-2'">
                             <p class="text-xs text-slate-400">Adres</p>
@@ -541,7 +529,7 @@ function emptyDeviceForm() {
 
 function emptyCustomerForm() {
     return {
-        ad:'', soyad:'', telefon:'', email:'', adres:'', notlar:'', lat:null, lng:null,
+        ad:'', soyad:'', telefon:'', adres:'', notlar:'', lat:null, lng:null,
         mevcut_cihaz: emptyDeviceForm(),
     };
 }
@@ -610,7 +598,7 @@ function musterilerApp() {
             this.mapSearch = '';
             this.form = {
                 ad: m.ad, soyad: m.soyad, telefon: m.telefon||'',
-                email: m.email||'', adres: m.adres||'', notlar: m.notlar||'',
+                adres: m.adres||'', notlar: m.notlar||'',
                 lat: m.lat || null, lng: m.lng || null,
                 mevcut_cihaz: emptyDeviceForm(),
             };
@@ -782,7 +770,7 @@ function musterilerApp() {
 
         // ── CRUD ───────────────────────────────────────────────────
         async saveMusteri() {
-            if (!this.editId && this.form.mevcut_cihaz.aktif && !this.form.mevcut_cihaz.cihaz_id) {
+            if (this.form.mevcut_cihaz.aktif && !this.form.mevcut_cihaz.cihaz_id) {
                 showToast('Mevcut cihaz eklemek için katalogdan cihaz seçin.', 'error');
                 return;
             }

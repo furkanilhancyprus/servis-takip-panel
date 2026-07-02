@@ -174,6 +174,76 @@ $tarih = date('Ymd_His');
 
 switch ($tip) {
 
+    case 'kar_ozet':
+        header('Content-Type: application/json; charset=utf-8');
+        $db = Database::getInstance();
+        $fid = $_SESSION['firma_id'];
+        $baslangic = $_GET['baslangic'] ?? date('Y-m-01');
+        $bitis = $_GET['bitis'] ?? date('Y-m-d');
+        $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
+
+        $satis = $db->fetchOne("
+            SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+            FROM satislar
+            WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$fid, $baslangic, $bitis]);
+
+        $servis = $db->fetchOne("
+            SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+            FROM servisler
+            WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$fid, $baslangic, $bitis]);
+
+        $satisMaliyet = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(
+                sk.miktar
+                * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+            ),0)
+            FROM satis_kalemleri sk
+            JOIN satislar s ON s.id=sk.satis_id AND s.deleted_at IS NULL
+            LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+            WHERE s.firma_id=? AND sk.deleted_at IS NULL AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$usdKur, $fid, $baslangic, $bitis]);
+
+        $servisMaliyet = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(
+                sp.miktar
+                * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
+            ),0)
+            FROM servis_parcalari sp
+            JOIN servisler s ON s.id=sp.servis_id AND s.deleted_at IS NULL
+            LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
+            WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$usdKur, $fid, $baslangic, $bitis]);
+
+        $satisCiro = (float)($satis['ciro'] ?? 0);
+        $servisCiro = (float)($servis['ciro'] ?? 0);
+        $toplamCiro = $satisCiro + $servisCiro;
+        $toplamMaliyet = $satisMaliyet + $servisMaliyet;
+        $netKar = $toplamCiro - $toplamMaliyet;
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'baslangic' => $baslangic,
+                'bitis' => $bitis,
+                'usd_try' => $usdKur,
+                'satis_adet' => (int)($satis['adet'] ?? 0),
+                'servis_adet' => (int)($servis['adet'] ?? 0),
+                'satis_ciro' => $satisCiro,
+                'servis_ciro' => $servisCiro,
+                'toplam_ciro' => $toplamCiro,
+                'satis_maliyet' => $satisMaliyet,
+                'servis_maliyet' => $servisMaliyet,
+                'toplam_maliyet' => $toplamMaliyet,
+                'net_kar' => $netKar,
+                'kar_orani' => $toplamCiro > 0 ? round(($netKar / $toplamCiro) * 100, 2) : 0,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+
     case 'musteri':
         $m    = new Musteri();
         $rows = $m->getAll();
@@ -184,7 +254,6 @@ switch ($tip) {
                 $r['id'],
                 trim($r['ad'] . ' ' . $r['soyad']),
                 $r['telefon'] ?? '-',
-                $r['email'] ?? '-',
                 $r['adres'] ?? '-',
                 $durumMap[$r['bakim_durumu'] ?? ''] ?? '-',
                 (int)($r['toplam_servis'] ?? 0),
@@ -192,7 +261,7 @@ switch ($tip) {
             ];
         }
         xlsxResponse(
-            ['#', 'Müşteri Adı', 'Telefon', 'Email', 'Adres', 'Bakım Durumu', 'Toplam Servis', 'Son Servis'],
+            ['#', 'Müşteri Adı', 'Telefon', 'Adres', 'Bakım Durumu', 'Toplam Servis', 'Son Servis'],
             $data,
             "musteri_raporu_$tarih.xlsx",
             'Müşteriler'
@@ -237,11 +306,12 @@ switch ($tip) {
                 (int)$r['kritik_stok_seviyesi'],
                 $r['stok_miktari'] <= $r['kritik_stok_seviyesi'] ? 'KRİTİK' : 'Normal',
                 (float)($r['birim_fiyat'] ?? 0),
+                (float)($r['maliyet_usd'] ?? 0),
                 $r['tedarikci'] ?? '-',
             ];
         }
         xlsxResponse(
-            ['#', 'Parça Adı', 'Marka', 'Stok', 'Kritik Seviye', 'Durum', 'Birim Fiyat (₺)', 'Tedarikçi'],
+            ['#', 'Parça Adı', 'Marka', 'Stok', 'Kritik Seviye', 'Durum', 'Birim Fiyat (₺)', 'Maliyet ($)', 'Tedarikçi'],
             $data,
             "stok_raporu_$tarih.xlsx",
             'Stok'

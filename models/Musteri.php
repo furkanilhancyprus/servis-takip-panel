@@ -8,12 +8,6 @@ class Musteri extends Model {
         $params = [$this->firmaId];
         $where  = "WHERE m.firma_id = ? AND m.deleted_at IS NULL";
 
-        if ($search !== '') {
-            $where .= " AND (m.ad LIKE ? OR m.soyad LIKE ? OR m.telefon LIKE ? OR m.email LIKE ?)";
-            $like = "%$search%";
-            $params = array_merge($params, [$like, $like, $like, $like]);
-        }
-
         $rows = $this->db->fetchAll("
             SELECT m.*,
                    COUNT(DISTINCT s.id) as toplam_servis,
@@ -25,8 +19,23 @@ class Musteri extends Model {
             LEFT JOIN periyodik_bakimlar pb ON m.id = pb.musteri_id AND pb.deleted_at IS NULL
             $where
             GROUP BY m.id
-            ORDER BY m.created_at DESC
+            ORDER BY m.ad COLLATE NOCASE ASC, m.soyad COLLATE NOCASE ASC, m.created_at DESC
         ", $params);
+
+        if ($search !== '') {
+            $rows = array_values(array_filter($rows, fn($m) => $this->searchMatches([
+                $m['ad'] ?? '',
+                $m['soyad'] ?? '',
+                trim(($m['ad'] ?? '') . ' ' . ($m['soyad'] ?? '')),
+                $m['telefon'] ?? '',
+                $m['adres'] ?? '',
+            ], $search)));
+        }
+
+        usort($rows, fn($a, $b) => strcmp(
+            $this->normalizeSearchText(trim(($a['ad'] ?? '') . ' ' . ($a['soyad'] ?? ''))),
+            $this->normalizeSearchText(trim(($b['ad'] ?? '') . ' ' . ($b['soyad'] ?? '')))
+        ));
 
         foreach ($rows as &$m) {
             $m['bakim_durumu'] = $this->calcBakimDurumu($m);
@@ -126,7 +135,7 @@ class Musteri extends Model {
         ", [
             $this->firmaId,
             $data['ad'], $data['soyad'], $data['telefon'] ?? null,
-            $data['email'] ?? null, $data['adres'] ?? null, $data['notlar'] ?? null,
+            null, $data['adres'] ?? null, $data['notlar'] ?? null,
             isset($data['lat']) && $data['lat'] !== '' ? (float)$data['lat'] : null,
             isset($data['lng']) && $data['lng'] !== '' ? (float)$data['lng'] : null,
             $this->uuid(),
@@ -156,11 +165,16 @@ class Musteri extends Model {
             WHERE id=? AND firma_id=? AND deleted_at IS NULL
         ", [
             $data['ad'], $data['soyad'], $data['telefon'] ?? null,
-            $data['email'] ?? null, $data['adres'] ?? null, $data['notlar'] ?? null,
+            null, $data['adres'] ?? null, $data['notlar'] ?? null,
             isset($data['lat']) && $data['lat'] !== '' ? (float)$data['lat'] : null,
             isset($data['lng']) && $data['lng'] !== '' ? (float)$data['lng'] : null,
             $this->now(), $id, $this->firmaId,
         ]);
+
+        $mevcutCihaz = $data['mevcut_cihaz'] ?? null;
+        if (is_array($mevcutCihaz) && !empty($mevcutCihaz['aktif'])) {
+            (new Cihaz())->linkExistingToMusteri($id, $mevcutCihaz);
+        }
         return true;
     }
 

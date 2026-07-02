@@ -1,5 +1,12 @@
 <?php
 session_start();
+define('ROOT', __DIR__);
+require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
+
+$db = Database::getInstance();
+remember_try_restore($db);
+
 if (isset($_SESSION['firma_id'])) {
     header('Location: index.php');
     exit;
@@ -77,6 +84,14 @@ if (isset($_SESSION['firma_id'])) {
                     </div>
                 </div>
 
+                <label class="flex items-center justify-between gap-3 cursor-pointer select-none">
+                    <span class="flex items-center gap-2 text-sm text-slate-600">
+                        <input type="checkbox" id="beniHatirla" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked>
+                        Beni hatırla
+                    </span>
+                    <span class="text-xs text-slate-400">30 gün açık kalsın</span>
+                </label>
+
                 <button type="submit" id="submitBtn"
                     class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2 text-sm">
                     <i class="fas fa-right-to-bracket"></i>
@@ -127,6 +142,7 @@ if (isset($_SESSION['firma_id'])) {
                 body: JSON.stringify({
                     email: document.getElementById('email').value,
                     sifre: document.getElementById('sifre').value,
+                    beni_hatirla: document.getElementById('beniHatirla').checked,
                 })
             });
             const data = await res.json();

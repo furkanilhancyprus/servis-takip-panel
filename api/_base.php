@@ -25,6 +25,14 @@ if (session_status() === PHP_SESSION_NONE) {
 
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
+
+if (!isset($_SESSION['firma_id'])) {
+    $restoredByRemember = remember_try_restore(Database::getInstance());
+    if ($restoredByRemember && empty($_SESSION['csrf_token']) && !empty($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+        $_SESSION['csrf_token'] = $_SERVER['HTTP_X_CSRF_TOKEN'];
+    }
+}
 
 if (!isset($_SESSION['firma_id'])) {
     $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';

@@ -204,6 +204,7 @@ class Database {
                 parca_adi             TEXT NOT NULL,
                 marka                 TEXT,
                 birim_fiyat           REAL DEFAULT 0,
+                maliyet_usd           REAL DEFAULT 0,
                 stok_miktari          INTEGER DEFAULT 0,
                 kritik_stok_seviyesi  INTEGER DEFAULT 5,
                 tedarikci             TEXT,
@@ -218,6 +219,8 @@ class Database {
                 parca_id    INTEGER,
                 miktar      INTEGER DEFAULT 1,
                 birim_fiyat REAL DEFAULT 0,
+                birim_maliyet_usd REAL DEFAULT 0,
+                usd_kur     REAL DEFAULT 0,
                 FOREIGN KEY (servis_id) REFERENCES servisler(id) ON DELETE CASCADE,
                 FOREIGN KEY (parca_id)  REFERENCES parcalar(id)
             );
@@ -243,6 +246,8 @@ class Database {
                 urun_adi    TEXT NOT NULL,
                 miktar      INTEGER DEFAULT 1,
                 birim_fiyat REAL DEFAULT 0,
+                birim_maliyet_usd REAL DEFAULT 0,
+                usd_kur     REAL DEFAULT 0,
                 parca_id    INTEGER,
                 FOREIGN KEY (satis_id) REFERENCES satislar(id) ON DELETE CASCADE,
                 FOREIGN KEY (parca_id) REFERENCES parcalar(id)
@@ -365,6 +370,11 @@ class Database {
             ['satislar', 'cihaz_id',      "ALTER TABLE satislar ADD COLUMN cihaz_id INTEGER"],
             ['satislar', 'seri_no',       "ALTER TABLE satislar ADD COLUMN seri_no TEXT"],
             ['parcalar',   'is_cihaz', "ALTER TABLE parcalar ADD COLUMN is_cihaz INTEGER DEFAULT 0"],
+            ['parcalar',   'maliyet_usd', "ALTER TABLE parcalar ADD COLUMN maliyet_usd REAL DEFAULT 0"],
+            ['servis_parcalari', 'birim_maliyet_usd', "ALTER TABLE servis_parcalari ADD COLUMN birim_maliyet_usd REAL DEFAULT 0"],
+            ['servis_parcalari', 'usd_kur', "ALTER TABLE servis_parcalari ADD COLUMN usd_kur REAL DEFAULT 0"],
+            ['satis_kalemleri', 'birim_maliyet_usd', "ALTER TABLE satis_kalemleri ADD COLUMN birim_maliyet_usd REAL DEFAULT 0"],
+            ['satis_kalemleri', 'usd_kur', "ALTER TABLE satis_kalemleri ADD COLUMN usd_kur REAL DEFAULT 0"],
             ['musteriler', 'lat',      "ALTER TABLE musteriler ADD COLUMN lat REAL"],
             ['musteriler', 'lng',      "ALTER TABLE musteriler ADD COLUMN lng REAL"],
             ['cihazlar', 'parca_id', "ALTER TABLE cihazlar ADD COLUMN parca_id INTEGER"],
@@ -428,6 +438,20 @@ class Database {
                 user_agent TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_seen_at DATETIME,
+                revoked_at DATETIME,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS remember_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id INTEGER NOT NULL,
+                selector TEXT UNIQUE NOT NULL,
+                token_hash TEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at DATETIME,
                 revoked_at DATETIME,
                 FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
             );

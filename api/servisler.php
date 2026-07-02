@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/_base.php';
 require_once ROOT . '/models/Servis.php';
+require_once ROOT . '/models/Tahsilat.php';
 
 $s  = new Servis();
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -19,16 +20,59 @@ switch (method()) {
             'baslangic'     => $_GET['baslangic']     ?? null,
             'bitis'         => $_GET['bitis']          ?? null,
             'search'        => $_GET['search']         ?? null,
-            'limit'         => $_GET['limit']          ?? 50,
+            'sirala'        => $_GET['sirala']         ?? null,
+            'limit'         => $_GET['limit']          ?? null,
         ];
         json_ok($s->getAll(array_filter($filtre)));
 
     case 'POST':
         $data = get_input();
-        if (empty($data['musteri_id']) || empty($data['servis_tipi'])) {
+        $musteriIds = array_values(array_unique(array_filter(array_map('intval', (array)($data['musteri_ids'] ?? [])))));
+        if (!empty($musteriIds)) {
+            $data['musteri_ids'] = $musteriIds;
+        }
+
+        if ((empty($data['musteri_id']) && empty($data['musteri_ids'])) || empty($data['servis_tipi'])) {
             json_err('Müşteri ve servis tipi zorunludur.');
         }
+        if (!empty($data['tahsilat']['tutar'])) {
+            $tahsilatTutar = (float)$data['tahsilat']['tutar'];
+            $servisToplam = (float)($data['toplam_tutar'] ?? 0);
+            if ($tahsilatTutar <= 0 || $tahsilatTutar > $servisToplam) {
+                json_err('Tahsilat tutarı servis toplamından büyük olamaz.');
+            }
+        }
+        if (!empty($data['musteri_ids'])) {
+            $newIds = $s->createMany($data['musteri_ids'], $data);
+            if (!empty($data['tahsilat']['tutar'])) {
+                $tahsilat = new Tahsilat();
+                foreach ($newIds as $i => $servisId) {
+                    $tahsilat->create([
+                        'musteri_id' => $data['musteri_ids'][$i] ?? null,
+                        'kaynak_tip' => 'servis',
+                        'kaynak_id' => $servisId,
+                        'tutar' => $data['tahsilat']['tutar'],
+                        'odeme_yontemi' => $data['tahsilat']['odeme_yontemi'] ?? 'nakit',
+                        'tahsilat_tarihi' => $data['tahsilat']['tahsilat_tarihi'] ?? date('Y-m-d'),
+                        'notlar' => $data['tahsilat']['notlar'] ?? null,
+                    ]);
+                }
+            }
+            json_ok(['ids' => $newIds, 'count' => count($newIds)], count($newIds) . ' servis kaydedildi.');
+        }
+
         $newId = $s->create($data);
+        if (!empty($data['tahsilat']['tutar'])) {
+            (new Tahsilat())->create([
+                'musteri_id' => $data['musteri_id'],
+                'kaynak_tip' => 'servis',
+                'kaynak_id' => $newId,
+                'tutar' => $data['tahsilat']['tutar'],
+                'odeme_yontemi' => $data['tahsilat']['odeme_yontemi'] ?? 'nakit',
+                'tahsilat_tarihi' => $data['tahsilat']['tahsilat_tarihi'] ?? date('Y-m-d'),
+                'notlar' => $data['tahsilat']['notlar'] ?? null,
+            ]);
+        }
         json_ok(['id' => $newId], 'Servis kaydedildi.');
 
     case 'PUT':

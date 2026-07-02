@@ -1,5 +1,11 @@
 <?php
 session_start();
+define('ROOT', __DIR__);
+require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
+
+$db = Database::getInstance();
+remember_clear($db);
 
 if (!empty($_SESSION['admin_support_mode']) && !empty($_SESSION['admin_id'])) {
     $adminId = $_SESSION['admin_id'];

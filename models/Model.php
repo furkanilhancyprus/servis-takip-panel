@@ -31,6 +31,32 @@ abstract class Model {
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
+    protected function normalizeSearchText($value): string {
+        $text = trim((string)$value);
+        $text = strtr($text, [
+            'Ç' => 'c', 'ç' => 'c',
+            'Ğ' => 'g', 'ğ' => 'g',
+            'İ' => 'i', 'I' => 'i', 'ı' => 'i',
+            'Ö' => 'o', 'ö' => 'o',
+            'Ş' => 's', 'ş' => 's',
+            'Ü' => 'u', 'ü' => 'u',
+            'Â' => 'a', 'â' => 'a',
+            'Î' => 'i', 'î' => 'i',
+            'Û' => 'u', 'û' => 'u',
+        ]);
+        return function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
+    }
+
+    protected function searchMatches(array $fields, string $search): bool {
+        $needle = $this->normalizeSearchText($search);
+        if ($needle === '') {
+            return true;
+        }
+
+        $haystack = $this->normalizeSearchText(implode(' ', array_map(fn($v) => (string)($v ?? ''), $fields)));
+        return strpos($haystack, $needle) !== false;
+    }
+
     protected function requireMusteri(int $musteriId): void {
         $ok = $this->db->fetchColumn(
             "SELECT id FROM musteriler WHERE id=? AND firma_id=? AND deleted_at IS NULL",

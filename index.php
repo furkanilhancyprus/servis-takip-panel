@@ -1,6 +1,11 @@
 <?php
 session_start();
 define('ROOT', __DIR__);
+require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
+
+$db = Database::getInstance();
+remember_try_restore($db);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -9,8 +14,6 @@ if (empty($_SESSION['csrf_token'])) {
 $desktopMod = (bool) getenv('STP_DATA_DIR');
 
 if ($desktopMod && !isset($_SESSION['firma_id'])) {
-    require_once ROOT . '/config/database.php';
-    $db = Database::getInstance();
     $kullanici = $db->fetchOne("SELECT id FROM kullanicilar LIMIT 1");
 
     if (!$kullanici) {
@@ -27,11 +30,6 @@ if (!$desktopMod && !isset($_SESSION['firma_id'])) {
     exit;
 }
 
-if (!isset($db)) {
-    require_once ROOT . '/config/database.php';
-}
-
-$db = Database::getInstance();
 if (isset($_SESSION['firma_id']) && empty($_SESSION['admin_support_mode'])) {
     $hesapDurumu = $db->fetchOne(
         "SELECT aktif, paket, abonelik_bitis FROM kullanicilar WHERE id=? AND deleted_at IS NULL",

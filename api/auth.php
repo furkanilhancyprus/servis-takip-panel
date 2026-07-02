@@ -4,6 +4,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
 
 function json_ok($data, string $message = ''): void {
     echo json_encode(['success' => true, 'data' => $data, 'message' => $message], JSON_UNESCAPED_UNICODE);
@@ -138,10 +139,17 @@ if ($action === 'giris') {
         json_err('E-posta veya şifre hatalı.');
     }
 
+    session_regenerate_id(true);
     $_SESSION['firma_id']  = $kullanici['id'];
     $_SESSION['firma_adi'] = $kullanici['firma_adi'];
     $_SESSION['ad_soyad']  = $kullanici['ad_soyad'];
     $_SESSION['email']     = $kullanici['email'];
+
+    if (!empty($input['beni_hatirla'])) {
+        remember_set_login($db, $kullanici);
+    } else {
+        remember_clear($db);
+    }
 
     json_ok(['firma_id' => $kullanici['id']], 'Giriş başarılı.');
 }
@@ -182,6 +190,7 @@ if ($action === 'desktop_login' || $action === 'mobile_login') {
 
 // ── ÇIKIŞ ───────────────────────────────────────────────────────────────────
 if ($action === 'cikis') {
+    remember_clear($db);
     session_destroy();
     json_ok(null, 'Çıkış yapıldı.');
 }

@@ -1,5 +1,10 @@
 <?php
 session_start();
+define('ROOT', __DIR__);
+require_once ROOT . '/config/database.php';
+require_once ROOT . '/config/remember.php';
+
+remember_try_restore(Database::getInstance());
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');

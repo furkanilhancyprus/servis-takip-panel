@@ -27,6 +27,10 @@ include __DIR__ . '/layout/header.php';
                 <option value="kismi">Kısmi Ödendi</option>
                 <option value="odendi">Ödendi</option>
             </select>
+            <select class="form-select w-44" x-model="sirala" @change="loadServisler()">
+                <option value="tarih_desc">Tarih: Yeni → Eski</option>
+                <option value="tarih_asc">Tarih: Eski → Yeni</option>
+            </select>
             <span class="text-sm text-slate-500" x-text="`${servisler.length} kayıt`"></span>
         </div>
         <button class="btn btn-primary" @click="openAddModal()">
@@ -62,46 +66,53 @@ include __DIR__ . '/layout/header.php';
                             Servis kaydı bulunamadı
                         </td></tr>
                     </template>
-                    <template x-for="s in servisler" :key="s.id">
-                        <tr>
-                            <td class="text-slate-400 text-xs" x-text="`#${s.id}`"></td>
-                            <td>
-                                <p class="font-medium text-slate-800" x-text="s.musteri_adi"></p>
-                                <p class="text-xs text-slate-400" x-text="s.telefon || ''"></p>
+                    <template x-for="row in groupedServisRows" :key="row.key">
+                        <tr :class="row.type === 'month' ? 'bg-slate-100' : ''">
+                            <td x-show="row.type === 'month'" colspan="8" class="py-3 px-4 border-y border-slate-200">
+                                <div class="flex items-center gap-3">
+                                    <span class="h-px bg-slate-300 flex-1"></span>
+                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500" x-text="row.label"></span>
+                                    <span class="h-px bg-slate-300 flex-1"></span>
+                                </div>
                             </td>
-                            <td>
+                            <td x-show="row.type === 'service'" class="text-slate-400 text-xs" x-text="row.item ? `#${row.item.id}` : ''"></td>
+                            <td x-show="row.type === 'service'">
+                                <p class="font-medium text-slate-800" x-text="row.item?.musteri_adi"></p>
+                                <p class="text-xs text-slate-400" x-text="row.item?.telefon || ''"></p>
+                            </td>
+                            <td x-show="row.type === 'service'">
                                 <span class="badge"
-                                      :class="s.servis_tipi === 'ariza' ? 'badge-red' : 'badge-blue'"
-                                      x-text="formatTip(s.servis_tipi)">
+                                      :class="row.item?.servis_tipi === 'ariza' ? 'badge-red' : 'badge-blue'"
+                                      x-text="formatTip(row.item?.servis_tipi)">
                                 </span>
                             </td>
-                            <td class="text-sm text-slate-600" x-text="formatDate(s.tamamlanma_tarihi)"></td>
-                            <td class="font-semibold text-slate-700" x-text="formatCurrency(s.toplam_tutar)"></td>
-                            <td>
+                            <td x-show="row.type === 'service'" class="text-sm text-slate-600" x-text="formatDate(row.item?.tamamlanma_tarihi)"></td>
+                            <td x-show="row.type === 'service'" class="font-semibold text-slate-700" x-text="formatCurrency(row.item?.toplam_tutar)"></td>
+                            <td x-show="row.type === 'service'">
                                 <span class="badge"
-                                      :class="odemeBadgeClass(s.odeme_durumu)"
-                                      x-text="odemeBadgeText(s.odeme_durumu)">
+                                      :class="odemeBadgeClass(row.item?.odeme_durumu)"
+                                      x-text="odemeBadgeText(row.item?.odeme_durumu)">
                                 </span>
                             </td>
-                            <td>
+                            <td x-show="row.type === 'service'">
                                 <span class="text-sm font-medium"
-                                      :class="(s.toplam_tutar - s.odenen_tutar) > 0 ? 'text-red-600' : 'text-emerald-600'"
-                                      x-text="formatCurrency(Math.max(0, s.toplam_tutar - (s.odenen_tutar||0)))">
+                                      :class="(row.item?.toplam_tutar - row.item?.odenen_tutar) > 0 ? 'text-red-600' : 'text-emerald-600'"
+                                      x-text="formatCurrency(Math.max(0, (row.item?.toplam_tutar || 0) - (row.item?.odenen_tutar || 0)))">
                                 </span>
                             </td>
-                            <td>
+                            <td x-show="row.type === 'service'">
                                 <div class="flex items-center justify-end gap-1">
-                                    <button class="btn btn-sm btn-secondary btn-icon" @click="viewServis(s)" title="Detay">
+                                    <button class="btn btn-sm btn-secondary btn-icon" @click="viewServis(row.item)" title="Detay">
                                         <i class="fas fa-eye text-slate-500"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-secondary btn-icon" @click="editServis(s)" title="Düzenle">
+                                    <button class="btn btn-sm btn-secondary btn-icon" @click="editServis(row.item)" title="Düzenle">
                                         <i class="fas fa-pen text-blue-500"></i>
                                     </button>
-                                    <button x-show="s.odeme_durumu !== 'odendi'"
-                                            class="btn btn-sm btn-success btn-icon" @click="openTahsilat(s)" title="Tahsilat Al">
+                                    <button x-show="row.item?.odeme_durumu !== 'odendi'"
+                                            class="btn btn-sm btn-success btn-icon" @click="openTahsilat(row.item)" title="Tahsilat Al">
                                         <i class="fas fa-money-bill-wave text-emerald-600"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-danger btn-icon" @click="deleteServis(s)" title="Sil">
+                                    <button class="btn btn-sm btn-danger btn-icon" @click="deleteServis(row.item)" title="Sil">
                                         <i class="fas fa-trash text-red-500"></i>
                                     </button>
                                 </div>
@@ -143,9 +154,22 @@ include __DIR__ . '/layout/header.php';
                             </div>
                         </template>
                     </div>
-                    <p class="text-sm text-blue-600 mt-1" x-show="form.musteri_id">
-                        <i class="fas fa-check-circle mr-1"></i>
-                        <span x-text="selectedMusteriName"></span>
+                    <div class="flex flex-wrap gap-2 mt-2" x-show="selectedMusteriler.length > 0">
+                        <template x-for="m in selectedMusteriler" :key="m.id">
+                            <span class="inline-flex items-center gap-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-3 py-1 text-sm font-medium">
+                                <i class="fas fa-check-circle text-xs"></i>
+                                <span x-text="`${m.ad} ${m.soyad}`"></span>
+                                <button type="button" class="text-blue-400 hover:text-red-500"
+                                        x-show="!editId"
+                                        @click="removeMusteri(m.id)">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                            </span>
+                        </template>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2" x-show="!editId && selectedMusteriler.length > 1">
+                        <i class="fas fa-layer-group mr-1"></i>
+                        <span x-text="`${selectedMusteriler.length} müşteri için ayrı servis kaydı oluşturulacak.`"></span>
                     </p>
                 </div>
 
@@ -296,6 +320,40 @@ include __DIR__ . '/layout/header.php';
                         <button type="button" class="text-xs text-blue-400 hover:text-blue-600 mt-1" @click="calcTotal()">
                             <i class="fas fa-sync-alt mr-1"></i>Hesapla
                         </button>
+                    </div>
+                </div>
+
+                <div x-show="!editId" class="border border-emerald-100 bg-emerald-50 rounded-xl p-4">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" class="mt-1" x-model="form.tahsilat_al" @change="form.tahsilat_al && fillFullPayment()">
+                        <span>
+                            <span class="block font-semibold text-slate-800 text-sm">Tahsilatı şimdi al</span>
+                            <span class="block text-xs text-slate-500 mt-0.5">
+                                Servis kaydıyla birlikte ödeme de işlensin. Çoklu müşteri seçildiyse her servis için aynı tutarda tahsilat oluşturulur.
+                            </span>
+                        </span>
+                    </label>
+                    <div x-show="form.tahsilat_al" x-transition class="grid grid-cols-3 gap-4 mt-4">
+                        <div>
+                            <label class="form-label">Tahsilat Tutarı</label>
+                            <input type="number" class="form-input" step="0.01" min="0.01"
+                                   :max="form.toplam_tutar"
+                                   x-model="form.tahsilat_tutar">
+                        </div>
+                        <div>
+                            <label class="form-label">Ödeme Yöntemi</label>
+                            <select class="form-select" x-model="form.odeme_yontemi">
+                                <option value="nakit">Nakit</option>
+                                <option value="kart">Kredi/Banka Kartı</option>
+                                <option value="havale">Havale / EFT</option>
+                                <option value="cek">Çek</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" class="btn btn-secondary w-full" @click="fillFullPayment()">
+                                <i class="fas fa-coins text-xs"></i> Tamamını Al
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -471,22 +529,37 @@ include __DIR__ . '/layout/header.php';
 function servislerApp() {
     return {
         servisler: [], loading: false,
-        search: '', tipFiltre: '', odemeFiltre: '',
+        search: '', tipFiltre: '', odemeFiltre: '', sirala: 'tarih_desc',
         showAdd: false, showDetail: false, showTahsilat: false,
         saving: false, editId: null,
         detail: null,
         standartIslemler: [], stoklar: [],
-        musteriSearch: '', musteriOneri: [], showMusteriList: false,
+        musteriSearch: '', musteriOneri: [], showMusteriList: false, selectedMusteriler: [],
         selectedMusteriName: '',
         form: {
             musteri_id: '', servis_tipi: '', servis_tarihi: new Date().toISOString().split('T')[0],
             islemler: [], parcalar: [], notlar: '', toplam_tutar: 0, periyot_ay: 6,
+            tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
         },
         varsayilanPeriyot: 6,
         tahsilatForm: {
             musteri_id: '', kaynak_id: '', kaynak_tip: 'servis',
             musteriAdi: '', kalan: 0, tutar: 0,
             odeme_yontemi: 'nakit', tahsilat_tarihi: new Date().toISOString().split('T')[0], notlar: '',
+        },
+
+        get groupedServisRows() {
+            const rows = [];
+            let currentMonth = null;
+            this.servisler.forEach(s => {
+                const monthKey = this.monthKey(s.tamamlanma_tarihi || s.created_at);
+                if (monthKey !== currentMonth) {
+                    currentMonth = monthKey;
+                    rows.push({ type: 'month', key: `month-${monthKey}`, label: this.monthLabel(s.tamamlanma_tarihi || s.created_at) });
+                }
+                rows.push({ type: 'service', key: `service-${s.id}`, item: s });
+            });
+            return rows;
         },
 
         async init() {
@@ -509,6 +582,7 @@ function servislerApp() {
                 if (this.search)       p.set('search', this.search);
                 if (this.tipFiltre)    p.set('servis_tipi', this.tipFiltre);
                 if (this.odemeFiltre)  p.set('odeme_durumu', this.odemeFiltre);
+                if (this.sirala)       p.set('sirala', this.sirala);
                 this.servisler = await api(`api/servisler.php?${p}`);
             } catch(e) {} finally { this.loading = false; }
         },
@@ -530,12 +604,23 @@ function servislerApp() {
         },
 
         selectMusteri(m) {
-            this.form.musteri_id     = m.id;
-            this.selectedMusteriName = `${m.ad} ${m.soyad}`;
-            this.musteriSearch       = `${m.ad} ${m.soyad}`;
+            if (this.editId) {
+                this.selectedMusteriler = [m];
+            } else if (!this.selectedMusteriler.some(x => String(x.id) === String(m.id))) {
+                this.selectedMusteriler.push(m);
+            }
+            this.form.musteri_id     = this.selectedMusteriler[0]?.id || '';
+            this.selectedMusteriName = this.selectedMusteriler.map(x => `${x.ad} ${x.soyad}`).join(', ');
+            this.musteriSearch       = '';
             this.showMusteriList     = false;
             // Müşterinin mevcut periyodunu doldur, yoksa varsayılan
             this.form.periyot_ay = parseInt(m.periyot_ay) || this.varsayilanPeriyot;
+        },
+
+        removeMusteri(id) {
+            this.selectedMusteriler = this.selectedMusteriler.filter(m => String(m.id) !== String(id));
+            this.form.musteri_id = this.selectedMusteriler[0]?.id || '';
+            this.selectedMusteriName = this.selectedMusteriler.map(x => `${x.ad} ${x.soyad}`).join(', ');
         },
 
         openAddModal() {
@@ -544,9 +629,11 @@ function servislerApp() {
                 musteri_id: '', servis_tipi: '', servis_tarihi: new Date().toISOString().split('T')[0],
                 islemler: [], parcalar: [], notlar: '', toplam_tutar: 0,
                 periyot_ay: this.varsayilanPeriyot,
+                tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
             };
             this.musteriSearch = '';
             this.selectedMusteriName = '';
+            this.selectedMusteriler = [];
             this.showAdd = true;
         },
 
@@ -562,9 +649,11 @@ function servislerApp() {
                     parcalar: [],
                     notlar: d.notlar || '',
                     toplam_tutar: d.toplam_tutar || 0,
+                    tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
                 };
                 this.musteriSearch = `${d.ad} ${d.soyad}`;
                 this.selectedMusteriName = `${d.ad} ${d.soyad}`;
+                this.selectedMusteriler = [{ id: d.musteri_id, ad: d.ad, soyad: d.soyad, telefon: d.telefon }];
                 this.showAdd = true;
             } catch(e) {}
         },
@@ -622,17 +711,39 @@ function servislerApp() {
                 .filter(p => !p.dahil)
                 .reduce((s, p) => s + (parseFloat(p.birim_fiyat) || 0) * (parseInt(p.miktar) || 1), 0);
             this.form.toplam_tutar = +(islemToplam + parcaToplam).toFixed(2);
+            if (this.form.tahsilat_al && (!this.form.tahsilat_tutar || parseFloat(this.form.tahsilat_tutar) > this.form.toplam_tutar)) {
+                this.fillFullPayment();
+            }
+        },
+
+        fillFullPayment() {
+            this.form.tahsilat_tutar = +(parseFloat(this.form.toplam_tutar || 0)).toFixed(2);
         },
 
         async saveServis() {
-            if (!this.form.musteri_id) { showToast('Lütfen müşteri seçiniz.', 'error'); return; }
+            if (this.selectedMusteriler.length === 0) { showToast('Lütfen müşteri seçiniz.', 'error'); return; }
             if (!this.form.servis_tipi) { showToast('Lütfen servis tipi seçiniz.', 'error'); return; }
             this.calcTotal();
+            if (!this.editId && this.form.tahsilat_al) {
+                const tahsilatTutar = parseFloat(this.form.tahsilat_tutar || 0);
+                if (tahsilatTutar <= 0 || tahsilatTutar > parseFloat(this.form.toplam_tutar || 0)) {
+                    showToast('Tahsilat tutarı servis toplamından büyük olamaz.', 'error');
+                    return;
+                }
+            }
             // Dahil parçalar stoktan düşer ve maliyet olarak saklanır; servis toplamına eklenmez.
             const payload = {
                 ...this.form,
+                musteri_id: this.selectedMusteriler[0]?.id || this.form.musteri_id,
+                musteri_ids: this.editId ? [] : this.selectedMusteriler.map(m => m.id),
                 islemler: this.normalizeIslemler(),
                 parcalar: this.form.parcalar,
+                tahsilat: (!this.editId && this.form.tahsilat_al) ? {
+                    tutar: parseFloat(this.form.tahsilat_tutar || 0),
+                    odeme_yontemi: this.form.odeme_yontemi || 'nakit',
+                    tahsilat_tarihi: this.form.servis_tarihi,
+                    notlar: 'Servis kaydı sırasında alındı',
+                } : null,
             };
             this.saving = true;
             try {
@@ -641,7 +752,7 @@ function servislerApp() {
                     showToast('Servis güncellendi.', 'success');
                 } else {
                     await api('api/servisler.php', { method: 'POST', body: payload });
-                    showToast('Servis kaydedildi.', 'success');
+                    showToast(this.selectedMusteriler.length > 1 ? `${this.selectedMusteriler.length} servis kaydedildi.` : 'Servis kaydedildi.', 'success');
                 }
                 this.showAdd = false;
                 await this.loadServisler();
@@ -699,6 +810,20 @@ function servislerApp() {
             const base = this.form.servis_tarihi ? new Date(this.form.servis_tarihi) : new Date();
             base.setMonth(base.getMonth() + ay);
             return base.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+        },
+
+        monthKey(dateValue) {
+            if (!dateValue) return 'tarihsiz';
+            const d = new Date(dateValue);
+            if (Number.isNaN(d.getTime())) return 'tarihsiz';
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        },
+
+        monthLabel(dateValue) {
+            if (!dateValue) return 'Tarihsiz Kayıtlar';
+            const d = new Date(dateValue);
+            if (Number.isNaN(d.getTime())) return 'Tarihsiz Kayıtlar';
+            return d.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
         },
 
         odemeBadgeClass(d) {

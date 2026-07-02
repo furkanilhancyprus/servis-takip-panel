@@ -5,7 +5,7 @@ class PeriyodikBakim extends Model {
 
     public function getByMusteriId(int $musteriId) {
         return $this->db->fetchOne("
-            SELECT pb.*, m.ad, m.soyad, m.telefon, m.email
+            SELECT pb.*, m.ad, m.soyad, m.telefon
             FROM periyodik_bakimlar pb JOIN musteriler m ON pb.musteri_id=m.id
             WHERE pb.musteri_id=? AND m.firma_id=? AND m.deleted_at IS NULL AND pb.deleted_at IS NULL
         ", [$musteriId, $this->firmaId]);
@@ -73,7 +73,7 @@ class PeriyodikBakim extends Model {
 
     public function getTumListe(): array {
         return $this->db->fetchAll("
-            SELECT pb.*, m.ad, m.soyad, m.telefon, m.email,
+            SELECT pb.*, m.ad, m.soyad, m.telefon,
                    CASE
                      WHEN pb.sonraki_bakim_tarihi IS NULL THEN 'ayarsiz'
                      WHEN pb.sonraki_bakim_tarihi < DATE('now') THEN 'gecikmis'

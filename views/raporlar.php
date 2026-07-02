@@ -26,6 +26,74 @@ include __DIR__ . '/layout/header.php';
         </div>
     </div>
 
+    <!-- Ciro / Maliyet / Kar Ozeti -->
+    <div class="card p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+            <div>
+                <h3 class="font-semibold text-slate-800">Ciro / Maliyet / Net Kâr</h3>
+                <p class="text-sm text-slate-500 mt-1">
+                    Satış ve servis cirosunu, stok maliyetlerini ve net kârı hesaplar.
+                    <span x-show="doviz.usd_try" x-text="` USD kuru: ${doviz.usd_try.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ₺`"></span>
+                </p>
+            </div>
+            <div class="flex flex-wrap items-end gap-2">
+                <div>
+                    <label class="form-label">Başlangıç</label>
+                    <input type="date" class="form-input" x-model="karFiltre.baslangic">
+                </div>
+                <div>
+                    <label class="form-label">Bitiş</label>
+                    <input type="date" class="form-input" x-model="karFiltre.bitis">
+                </div>
+                <button type="button" class="btn btn-primary" @click="loadKarOzet()">
+                    <i class="fas fa-calculator"></i> Hesapla
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
+                <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Toplam Ciro</p>
+                <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="formatCurrency(karOzet.toplam_ciro || 0)"></p>
+                <p class="text-xs text-emerald-600 mt-1" x-text="`${karOzet.satis_adet || 0} satış, ${karOzet.servis_adet || 0} servis`"></p>
+            </div>
+            <div class="rounded-lg bg-orange-50 border border-orange-100 p-4">
+                <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide">Toplam Maliyet</p>
+                <p class="text-2xl font-bold text-orange-700 mt-1" x-text="formatCurrency(karOzet.toplam_maliyet || 0)"></p>
+                <p class="text-xs text-orange-600 mt-1">Stok maliyetlerinden hesaplanır</p>
+            </div>
+            <div class="rounded-lg border p-4"
+                 :class="(karOzet.net_kar || 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'">
+                <p class="text-xs font-semibold uppercase tracking-wide"
+                   :class="(karOzet.net_kar || 0) >= 0 ? 'text-blue-600' : 'text-red-600'">Net Kâr</p>
+                <p class="text-2xl font-bold mt-1"
+                   :class="(karOzet.net_kar || 0) >= 0 ? 'text-blue-700' : 'text-red-700'"
+                   x-text="formatCurrency(karOzet.net_kar || 0)"></p>
+                <p class="text-xs mt-1"
+                   :class="(karOzet.net_kar || 0) >= 0 ? 'text-blue-600' : 'text-red-600'"
+                   x-text="`Kâr oranı: %${karOzet.kar_orani || 0}`"></p>
+            </div>
+            <div class="rounded-lg bg-slate-50 border border-slate-100 p-4 space-y-2 text-sm">
+                <div class="flex justify-between gap-3">
+                    <span class="text-slate-500">Satış Cirosu</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.satis_ciro || 0)"></strong>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <span class="text-slate-500">Servis Cirosu</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.servis_ciro || 0)"></strong>
+                </div>
+                <div class="flex justify-between gap-3 border-t border-slate-200 pt-2">
+                    <span class="text-slate-500">Satış Maliyeti</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.satis_maliyet || 0)"></strong>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <span class="text-slate-500">Servis Maliyeti</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.servis_maliyet || 0)"></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Rapor Kartları -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -173,13 +241,32 @@ include __DIR__ . '/layout/header.php';
 function raporlarApp() {
     return {
         stats: {},
+        doviz: { usd_try: 0 },
+        karOzet: {},
         trendYil: '<?= date('Y') ?>',
         trendChart: null,
         servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
         bakimAy: '<?= date('Y-m') ?>',
+        karFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
         finansFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
 
-        async init() { await this.loadStats(); },
+        async init() { await Promise.all([this.loadStats(), this.loadDoviz()]); await this.loadKarOzet(); },
+
+        async loadDoviz() {
+            try { this.doviz = await api('api/doviz.php'); } catch(e) { this.doviz = { usd_try: 0 }; }
+        },
+
+        async loadKarOzet() {
+            try {
+                const p = new URLSearchParams({
+                    tip: 'kar_ozet',
+                    baslangic: this.karFiltre.baslangic,
+                    bitis: this.karFiltre.bitis,
+                    usd_try: this.doviz.usd_try || 0,
+                });
+                this.karOzet = await api(`api/raporlar.php?${p}`);
+            } catch(e) {}
+        },
 
         async loadStats() {
             try {

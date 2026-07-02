@@ -109,21 +109,27 @@ class Satis extends Model {
         // Kalemler
         if (!empty($kalemler)) {
             $stmt     = $pdo->prepare(
-                "INSERT INTO satis_kalemleri (satis_id, urun_adi, miktar, birim_fiyat, parca_id) VALUES (?,?,?,?,?)"
+                "INSERT INTO satis_kalemleri (satis_id, urun_adi, miktar, birim_fiyat, parca_id, birim_maliyet_usd, usd_kur) VALUES (?,?,?,?,?,?,?)"
             );
             $stokStmt = $pdo->prepare(
                     "UPDATE parcalar SET stok_miktari=stok_miktari-?, updated_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=? AND stok_miktari>=?"
             );
+            $maliyetStmt = $pdo->prepare(
+                "SELECT maliyet_usd FROM parcalar WHERE id=? AND firma_id=? AND deleted_at IS NULL"
+            );
             foreach ($kalemler as $k) {
                 $parcaId = !empty($k['parca_id']) ? (int)$k['parca_id'] : null;
                 $miktar = max(1, (int)($k['miktar'] ?? 1));
+                $birimMaliyetUsd = 0;
                 if ($parcaId) {
+                    $maliyetStmt->execute([$parcaId, $this->firmaId]);
+                    $birimMaliyetUsd = (float)($maliyetStmt->fetchColumn() ?: 0);
                     $stokStmt->execute([$miktar, $parcaId, $this->firmaId, $miktar]);
                     if ($stokStmt->rowCount() !== 1) {
                         throw new InvalidArgumentException('Stok yetersiz veya parca bu firmaya ait degil.');
                     }
                 }
-                $stmt->execute([$id, $k['urun_adi'], $miktar, $k['birim_fiyat'] ?? 0, $parcaId]);
+                $stmt->execute([$id, $k['urun_adi'], $miktar, $k['birim_fiyat'] ?? 0, $parcaId, $birimMaliyetUsd, $k['usd_kur'] ?? 0]);
             }
         }
 

@@ -17,21 +17,32 @@ class Servis extends Model {
         if (!empty($filtre['odeme_durumu'])) { $sql .= " AND s.odeme_durumu=?";         $params[] = $filtre['odeme_durumu']; }
         if (!empty($filtre['baslangic']))    { $sql .= " AND DATE(s.tamamlanma_tarihi)>=?"; $params[] = $filtre['baslangic']; }
         if (!empty($filtre['bitis']))        { $sql .= " AND DATE(s.tamamlanma_tarihi)<=?"; $params[] = $filtre['bitis']; }
+        $sirala = (string)($filtre['sirala'] ?? 'tarih_desc');
+        $sql .= $sirala === 'tarih_asc'
+            ? " ORDER BY DATE(s.tamamlanma_tarihi) ASC, s.id ASC"
+            : " ORDER BY DATE(s.tamamlanma_tarihi) DESC, s.id DESC";
+        if (empty($filtre['search']) && !empty($filtre['limit'])) { $sql .= " LIMIT " . (int)$filtre['limit']; }
+
+        $rows = $this->db->fetchAll($sql, $params);
+
         if (!empty($filtre['search'])) {
-            $sql .= " AND (m.ad LIKE ? OR m.soyad LIKE ? OR m.telefon LIKE ?)";
-            $like = '%' . $filtre['search'] . '%';
-            $params = array_merge($params, [$like, $like, $like]);
+            $rows = array_values(array_filter($rows, fn($s) => $this->searchMatches([
+                $s['musteri_adi'] ?? '',
+                $s['telefon'] ?? '',
+                $s['servis_tipi'] ?? '',
+                $s['notlar'] ?? '',
+            ], (string)$filtre['search'])));
+            if (!empty($filtre['limit'])) {
+                $rows = array_slice($rows, 0, (int)$filtre['limit']);
+            }
         }
 
-        $sql .= " ORDER BY s.created_at DESC";
-        if (!empty($filtre['limit'])) { $sql .= " LIMIT " . (int)$filtre['limit']; }
-
-        return $this->db->fetchAll($sql, $params);
+        return $rows;
     }
 
     public function getById(int $id) {
         $servis = $this->db->fetchOne("
-            SELECT s.*, m.ad, m.soyad, m.telefon, m.adres, m.email
+            SELECT s.*, m.ad, m.soyad, m.telefon, m.adres
             FROM servisler s
             JOIN musteriler m ON s.musteri_id = m.id AND m.deleted_at IS NULL
             WHERE s.id=? AND s.firma_id=? AND s.deleted_at IS NULL
@@ -56,64 +67,98 @@ class Servis extends Model {
     }
 
     public function create(array $data): int {
-        $tarih = $data['servis_tarihi'] ?? $this->today();
-        $musteriId = (int)($data['musteri_id'] ?? 0);
-        $this->requireMusteri($musteriId);
-
         $pdo = $this->db->getConnection();
         $pdo->beginTransaction();
         try {
-            $id = $this->db->execute("
-                INSERT INTO servisler (firma_id, musteri_id, servis_tipi, durum, toplam_tutar,
-                                       odeme_durumu, odenen_tutar, notlar, tamamlanma_tarihi, created_at, updated_at)
-                VALUES (?,?,?,'tamamlanan',?,'odenmedi',0,?,?,?,?)
-            ", [
-                $this->firmaId, $musteriId, $data['servis_tipi'],
-                $data['toplam_tutar'] ?? 0, $data['notlar'] ?? null,
-                $tarih, $tarih, $tarih,
-            ]);
-
-            if (!empty($data['islemler'])) {
-                $stmt = $pdo->prepare(
-                    "INSERT INTO servis_islemleri (servis_id, islem, tutar) VALUES (?,?,?)"
-                );
-                foreach ($data['islemler'] as $islem) {
-                    if (empty($islem['islem'])) continue;
-                    $stmt->execute([$id, $islem['islem'], $islem['tutar'] ?? 0]);
-                }
-            }
-
-            if (!empty($data['parcalar'])) {
-                $stmt = $pdo->prepare(
-                    "INSERT INTO servis_parcalari (servis_id, parca_id, miktar, birim_fiyat) VALUES (?,?,?,?)"
-                );
-                $stokStmt = $pdo->prepare(
-                    "UPDATE parcalar SET stok_miktari=stok_miktari-?, updated_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=? AND stok_miktari>=?"
-                );
-                foreach ($data['parcalar'] as $parca) {
-                    if (empty($parca['parca_id'])) continue;
-                    $parcaId = (int)$parca['parca_id'];
-                    $miktar = max(1, (int)($parca['miktar'] ?? 1));
-                    $stokStmt->execute([$miktar, $parcaId, $this->firmaId, $miktar]);
-                    if ($stokStmt->rowCount() !== 1) {
-                        throw new InvalidArgumentException('Stok yetersiz veya parca bu firmaya ait degil.');
-                    }
-                    $stmt->execute([$id, $parcaId, $miktar, $parca['birim_fiyat'] ?? 0]);
-                }
-            }
-
-            if ($data['servis_tipi'] === 'periyodik_bakim') {
-                $periyot = isset($data['periyot_ay']) && (int)$data['periyot_ay'] > 0
-                    ? (int)$data['periyot_ay'] : null;
-                $this->bakimTamamlandi($musteriId, $tarih, $periyot);
-            }
-
+            $id = $this->createRecord($data, $pdo);
             $pdo->commit();
             return $id;
         } catch (Throwable $e) {
             $pdo->rollBack();
             throw $e;
         }
+    }
+
+    public function createMany(array $musteriIds, array $data): array {
+        $musteriIds = array_values(array_unique(array_filter(array_map('intval', $musteriIds))));
+        if (empty($musteriIds)) {
+            throw new InvalidArgumentException('En az bir musteri secilmelidir.');
+        }
+
+        $pdo = $this->db->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $ids = [];
+            foreach ($musteriIds as $musteriId) {
+                $item = $data;
+                $item['musteri_id'] = $musteriId;
+                unset($item['musteri_ids']);
+                $ids[] = $this->createRecord($item, $pdo);
+            }
+            $pdo->commit();
+            return $ids;
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    private function createRecord(array $data, PDO $pdo): int {
+        $tarih = $data['servis_tarihi'] ?? $this->today();
+        $musteriId = (int)($data['musteri_id'] ?? 0);
+        $this->requireMusteri($musteriId);
+
+        $id = $this->db->execute("
+            INSERT INTO servisler (firma_id, musteri_id, servis_tipi, durum, toplam_tutar,
+                                   odeme_durumu, odenen_tutar, notlar, tamamlanma_tarihi, created_at, updated_at)
+            VALUES (?,?,?,'tamamlanan',?,'odenmedi',0,?,?,?,?)
+        ", [
+            $this->firmaId, $musteriId, $data['servis_tipi'],
+            $data['toplam_tutar'] ?? 0, $data['notlar'] ?? null,
+            $tarih, $tarih, $tarih,
+        ]);
+
+        if (!empty($data['islemler'])) {
+            $stmt = $pdo->prepare(
+                "INSERT INTO servis_islemleri (servis_id, islem, tutar) VALUES (?,?,?)"
+            );
+            foreach ($data['islemler'] as $islem) {
+                if (empty($islem['islem'])) continue;
+                $stmt->execute([$id, $islem['islem'], $islem['tutar'] ?? 0]);
+            }
+        }
+
+        if (!empty($data['parcalar'])) {
+            $stmt = $pdo->prepare(
+                "INSERT INTO servis_parcalari (servis_id, parca_id, miktar, birim_fiyat, birim_maliyet_usd, usd_kur) VALUES (?,?,?,?,?,?)"
+            );
+            $stokStmt = $pdo->prepare(
+                "UPDATE parcalar SET stok_miktari=stok_miktari-?, updated_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=? AND stok_miktari>=?"
+            );
+            $maliyetStmt = $pdo->prepare(
+                "SELECT maliyet_usd FROM parcalar WHERE id=? AND firma_id=? AND deleted_at IS NULL"
+            );
+            foreach ($data['parcalar'] as $parca) {
+                if (empty($parca['parca_id'])) continue;
+                $parcaId = (int)$parca['parca_id'];
+                $miktar = max(1, (int)($parca['miktar'] ?? 1));
+                $maliyetStmt->execute([$parcaId, $this->firmaId]);
+                $birimMaliyetUsd = (float)($maliyetStmt->fetchColumn() ?: 0);
+                $stokStmt->execute([$miktar, $parcaId, $this->firmaId, $miktar]);
+                if ($stokStmt->rowCount() !== 1) {
+                    throw new InvalidArgumentException('Stok yetersiz veya parca bu firmaya ait degil.');
+                }
+                $stmt->execute([$id, $parcaId, $miktar, $parca['birim_fiyat'] ?? 0, $birimMaliyetUsd, $parca['usd_kur'] ?? 0]);
+            }
+        }
+
+        if ($data['servis_tipi'] === 'periyodik_bakim') {
+            $periyot = isset($data['periyot_ay']) && (int)$data['periyot_ay'] > 0
+                ? (int)$data['periyot_ay'] : null;
+            $this->bakimTamamlandi($musteriId, $tarih, $periyot);
+        }
+
+        return $id;
     }
 
     public function update(int $id, array $data): void {

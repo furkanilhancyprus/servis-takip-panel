@@ -77,6 +77,7 @@ include __DIR__ . '/layout/header.php';
                         <th class="text-center">Stok</th>
                         <th class="text-center">Kritik Seviye</th>
                         <th>Birim Fiyat</th>
+                        <th>Maliyet</th>
                         <th>Tedarikçi</th>
                         <th>Tür</th>
                         <th>Durum</th>
@@ -85,12 +86,12 @@ include __DIR__ . '/layout/header.php';
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="9" class="text-center py-10 text-slate-400">
+                        <tr><td colspan="10" class="text-center py-10 text-slate-400">
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
                     <template x-if="!loading && filtered.length === 0">
-                        <tr><td colspan="9" class="text-center py-10 text-slate-400">
+                        <tr><td colspan="10" class="text-center py-10 text-slate-400">
                             <i class="fas fa-boxes-stacked text-3xl mb-2 block text-slate-200"></i>
                             Parça bulunamadı
                         </td></tr>
@@ -110,6 +111,10 @@ include __DIR__ . '/layout/header.php';
                             </td>
                             <td class="text-center text-slate-400" x-text="p.kritik_stok_seviyesi"></td>
                             <td class="font-medium text-slate-700" x-text="formatCurrency(p.birim_fiyat)"></td>
+                            <td>
+                                <p class="font-medium text-slate-700" x-text="formatUsd(p.maliyet_usd)"></p>
+                                <p class="text-xs text-slate-400" x-text="doviz.usd_try ? formatCurrency((p.maliyet_usd || 0) * doviz.usd_try) : 'Kur bekleniyor'"></p>
+                            </td>
                             <td class="text-slate-500 text-sm" x-text="p.tedarikci || '—'"></td>
                             <td>
                                 <span x-show="p.is_cihaz == 1"
@@ -199,11 +204,20 @@ include __DIR__ . '/layout/header.php';
                         <input type="text" class="form-input" x-model="form.tedarikci">
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label" x-text="form.is_cihaz ? 'Satış Fiyatı (₺)' : 'Birim Fiyat (₺)'"></label>
                         <input type="number" class="form-input" step="0.01" min="0" x-model="form.birim_fiyat">
                     </div>
+                    <div>
+                        <label class="form-label">Maliyet ($)</label>
+                        <input type="number" class="form-input" step="0.01" min="0" x-model="form.maliyet_usd">
+                        <p class="text-xs text-slate-400 mt-1" x-show="doviz.usd_try">
+                            <span x-text="'Yaklaşık: ' + formatCurrency((form.maliyet_usd || 0) * doviz.usd_try)"></span>
+                        </p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Stok Miktarı</label>
                         <input type="number" class="form-input" min="0" x-model="form.stok_miktari">
@@ -256,7 +270,8 @@ function stokApp() {
     return {
         parcalar: [], loading: false, search: '', sadecekritik: false, sadececihaz: false,
         showForm: false, showStok: false, editId: null, saving: false,
-        form: { parca_adi: '', marka: '', birim_fiyat: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false },
+        doviz: { usd_try: 0 },
+        form: { parca_adi: '', marka: '', birim_fiyat: 0, maliyet_usd: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false },
         stokForm: { id: null, parca_adi: '', mevcutStok: 0, miktar: 1 },
 
         get filtered() {
@@ -272,7 +287,11 @@ function stokApp() {
         get kritikCount() { return this.parcalar.filter(p => p.stok_miktari <= p.kritik_stok_seviyesi).length; },
         get stokDegeri() { return this.parcalar.reduce((s, p) => s + (p.stok_miktari * (p.birim_fiyat || 0)), 0); },
 
-        async init() { await this.loadParcalar(); },
+        async init() { await Promise.all([this.loadParcalar(), this.loadDoviz()]); },
+
+        async loadDoviz() {
+            try { this.doviz = await api('api/doviz.php'); } catch(e) { this.doviz = { usd_try: 0 }; }
+        },
 
         async loadParcalar() {
             this.loading = true;
@@ -281,7 +300,7 @@ function stokApp() {
 
         openAddModal() {
             this.editId = null;
-            this.form = { parca_adi: '', marka: '', birim_fiyat: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false };
+            this.form = { parca_adi: '', marka: '', birim_fiyat: 0, maliyet_usd: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false };
             this.showForm = true;
         },
 
@@ -289,7 +308,7 @@ function stokApp() {
             this.editId = p.id;
             this.form = {
                 parca_adi: p.parca_adi, marka: p.marka || '',
-                birim_fiyat: p.birim_fiyat || 0, stok_miktari: p.stok_miktari || 0,
+                birim_fiyat: p.birim_fiyat || 0, maliyet_usd: p.maliyet_usd || 0, stok_miktari: p.stok_miktari || 0,
                 kritik_stok_seviyesi: p.kritik_stok_seviyesi || 5,
                 tedarikci: p.tedarikci || '',
                 is_cihaz: p.is_cihaz == 1,
@@ -337,6 +356,7 @@ function stokApp() {
         },
 
         formatCurrency,
+        formatUsd(v) { return '$' + (parseFloat(v || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
     }
 }
 </script>
