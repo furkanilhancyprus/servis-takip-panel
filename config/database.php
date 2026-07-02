@@ -473,7 +473,79 @@ class Database {
             $this->pdo->exec("ALTER TABLE sync_state ADD COLUMN token TEXT");
         }
 
+        $this->backfillBakimFromSales();
         $this->syncCihazKatalogu();
+    }
+
+    private function backfillBakimFromSales(): void {
+        $this->pdo->exec("
+            UPDATE periyodik_bakimlar
+            SET aktif=1,
+                son_bakim_tarihi=COALESCE(
+                    son_bakim_tarihi,
+                    (
+                        SELECT MAX(s.satis_tarihi)
+                        FROM satislar s
+                        JOIN musteriler m ON m.id=periyodik_bakimlar.musteri_id
+                        WHERE s.musteri_id=periyodik_bakimlar.musteri_id
+                          AND s.firma_id=m.firma_id
+                          AND s.deleted_at IS NULL
+                    )
+                ),
+                sonraki_bakim_tarihi=date(
+                    (
+                        SELECT MAX(s.satis_tarihi)
+                        FROM satislar s
+                        JOIN musteriler m ON m.id=periyodik_bakimlar.musteri_id
+                        WHERE s.musteri_id=periyodik_bakimlar.musteri_id
+                          AND s.firma_id=m.firma_id
+                          AND s.deleted_at IS NULL
+                    ),
+                    '+' || COALESCE(
+                        NULLIF(periyot_ay, 0),
+                        (
+                            SELECT CAST(a.deger AS INTEGER)
+                            FROM ayarlar a
+                            JOIN musteriler m ON m.firma_id=a.firma_id
+                            WHERE m.id=periyodik_bakimlar.musteri_id
+                              AND a.anahtar='varsayilan_bakim_periyodu'
+                            LIMIT 1
+                        ),
+                        6
+                    ) || ' months'
+                ),
+                synced_at=NULL
+            WHERE deleted_at IS NULL
+              AND sonraki_bakim_tarihi IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM satislar s
+                  JOIN musteriler m ON m.id=periyodik_bakimlar.musteri_id
+                  WHERE s.musteri_id=periyodik_bakimlar.musteri_id
+                    AND s.firma_id=m.firma_id
+                    AND s.deleted_at IS NULL
+              )
+        ");
+
+        $this->pdo->exec("
+            INSERT INTO periyodik_bakimlar (musteri_id, aktif, periyot_ay, son_bakim_tarihi, sonraki_bakim_tarihi, uuid)
+            SELECT
+                m.id,
+                1,
+                COALESCE(CAST(a.deger AS INTEGER), 6),
+                MAX(s.satis_tarihi),
+                date(MAX(s.satis_tarihi), '+' || COALESCE(CAST(a.deger AS INTEGER), 6) || ' months'),
+                lower(hex(randomblob(16)))
+            FROM musteriler m
+            JOIN satislar s ON s.musteri_id=m.id AND s.firma_id=m.firma_id AND s.deleted_at IS NULL
+            LEFT JOIN ayarlar a ON a.firma_id=m.firma_id AND a.anahtar='varsayilan_bakim_periyodu'
+            WHERE m.deleted_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM periyodik_bakimlar pb
+                  WHERE pb.musteri_id=m.id AND pb.deleted_at IS NULL
+              )
+            GROUP BY m.id
+        ");
     }
 
     private function syncCihazKatalogu(): void {

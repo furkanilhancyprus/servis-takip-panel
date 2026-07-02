@@ -272,12 +272,13 @@ switch ($tip) {
         $filtre = [
             'baslangic' => $_GET['baslangic'] ?? null,
             'bitis'     => $_GET['bitis'] ?? null,
+            'sirala'    => 'tarih_asc',
         ];
         $rows = $s->getAll(array_filter($filtre));
         $data = [];
         foreach ($rows as $r) {
             $data[] = [
-                $r['id'],
+                $r['sira_no'] ?? '',
                 $r['musteri_adi'] ?? '-',
                 $r['telefon'] ?? '-',
                 $r['servis_tipi'] === 'ariza' ? 'Arıza' : 'Periyodik Bakım',
@@ -287,7 +288,7 @@ switch ($tip) {
             ];
         }
         xlsxResponse(
-            ['#', 'Müşteri', 'Telefon', 'Servis Tipi', 'Tarih', 'Tutar (₺)', 'Notlar'],
+            ['Sıra', 'Müşteri', 'Telefon', 'Servis Tipi', 'Tarih', 'Tutar (₺)', 'Notlar'],
             $data,
             "servis_raporu_$tarih.xlsx",
             'Servisler'
@@ -322,13 +323,14 @@ switch ($tip) {
         $filtre = [
             'baslangic' => $_GET['baslangic'] ?? date('Y-m-01'),
             'bitis'     => $_GET['bitis'] ?? date('Y-m-d'),
+            'sirala'    => 'tarih_asc',
         ];
         $rows       = $s->getAll(array_filter($filtre));
         $toplamCiro = array_sum(array_column($rows, 'toplam_tutar'));
         $data       = [];
         foreach ($rows as $r) {
             $data[] = [
-                $r['id'],
+                $r['sira_no'] ?? '',
                 $r['musteri_adi'] ?? '-',
                 $r['servis_tipi'] === 'ariza' ? 'Arıza' : 'Periyodik Bakım',
                 $r['tamamlanma_tarihi'] ? date('d.m.Y', strtotime($r['tamamlanma_tarihi'])) : '-',
@@ -338,7 +340,7 @@ switch ($tip) {
         // Toplam satırı en sona
         $data[] = ['', '', '', 'TOPLAM CİRO', $toplamCiro];
         xlsxResponse(
-            ['#', 'Müşteri', 'Servis Tipi', 'Tarih', 'Tutar (₺)'],
+            ['Sıra', 'Müşteri', 'Servis Tipi', 'Tarih', 'Tutar (₺)'],
             $data,
             "finans_raporu_$tarih.xlsx",
             'Finans'

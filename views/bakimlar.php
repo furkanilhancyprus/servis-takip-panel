@@ -65,7 +65,7 @@ include __DIR__ . '/layout/header.php';
                         <th>Son Bakım</th>
                         <th>Planlanan Tarih</th>
                         <th class="text-center">Periyot</th>
-                        <th class="text-center">Kalan / Geçen</th>
+                        <th class="text-center">Kalan</th>
                         <th>Durum</th>
                         <th class="text-right">İşlemler</th>
                     </tr>
@@ -100,8 +100,8 @@ include __DIR__ . '/layout/header.php';
                             <td class="text-center text-slate-600" x-text="`${b.periyot_ay} ay`"></td>
                             <td class="text-center">
                                 <span class="font-semibold text-sm"
-                                      :class="b.kalan_gun < 0 ? 'text-red-600' : b.kalan_gun <= 14 ? 'text-amber-600' : 'text-emerald-600'"
-                                      x-text="b.kalan_gun !== null ? (b.kalan_gun < 0 ? Math.abs(b.kalan_gun)+' gün geçti' : b.kalan_gun+' gün kaldı') : '—'">
+                                      :class="b.kalan_gun < 0 ? 'text-slate-500' : b.kalan_gun <= 14 ? 'text-amber-600' : 'text-emerald-600'"
+                                      x-text="b.kalan_gun !== null ? (b.kalan_gun < 0 ? 'Bu ay içinde' : b.kalan_gun+' gün kaldı') : '—'">
                                 </span>
                             </td>
                             <td x-html="durumBadge(b.bakim_durumu)"></td>
@@ -139,7 +139,7 @@ include __DIR__ . '/layout/header.php';
                         <th>Son Bakım</th>
                         <th>Olması Gereken Tarih</th>
                         <th class="text-center">Periyot</th>
-                        <th class="text-center">Kaç Gün Geçti</th>
+                        <th class="text-center">Kaç Ay Geçti</th>
                         <th class="text-right">İşlemler</th>
                     </tr>
                 </thead>
@@ -168,7 +168,7 @@ include __DIR__ . '/layout/header.php';
                             <td class="text-center text-slate-600" x-text="`${b.periyot_ay} ay`"></td>
                             <td class="text-center">
                                 <span class="font-semibold text-red-600 text-sm"
-                                      x-text="b.kalan_gun !== null ? Math.abs(b.kalan_gun)+' gün' : '—'">
+                                      x-text="gecikmeAyLabel(b.sonraki_bakim_tarihi)">
                                 </span>
                             </td>
                             <td>
@@ -477,6 +477,15 @@ function bakimlarApp() {
                 showToast('Bakım tamamlandı! Sonraki bakım tarihi güncellendi.', 'success');
                 await this.loadListe();
             } catch(e) {}
+        },
+
+        gecikmeAyLabel(dateValue) {
+            if (!dateValue) return '—';
+            const [dueYear, dueMonth] = String(dateValue).slice(0, 7).split('-').map(Number);
+            const [selectedYear, selectedMonth] = this.seciliAy.split('-').map(Number);
+            if (!dueYear || !dueMonth || !selectedYear || !selectedMonth) return '—';
+            const months = Math.max(1, (selectedYear - dueYear) * 12 + (selectedMonth - dueMonth));
+            return months + ' ay';
         },
 
         formatDate, durumBadge,

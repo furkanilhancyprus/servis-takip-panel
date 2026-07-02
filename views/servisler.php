@@ -44,7 +44,6 @@ include __DIR__ . '/layout/header.php';
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>#</th>
                         <th>Müşteri</th>
                         <th>Servis Tipi</th>
                         <th>Tarih</th>
@@ -56,26 +55,25 @@ include __DIR__ . '/layout/header.php';
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="8" class="text-center py-12 text-slate-400">
+                        <tr><td colspan="7" class="text-center py-12 text-slate-400">
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
                     <template x-if="!loading && servisler.length === 0">
-                        <tr><td colspan="8" class="text-center py-12 text-slate-400">
+                        <tr><td colspan="7" class="text-center py-12 text-slate-400">
                             <i class="fas fa-wrench text-3xl mb-2 block text-slate-200"></i>
                             Servis kaydı bulunamadı
                         </td></tr>
                     </template>
                     <template x-for="row in groupedServisRows" :key="row.key">
                         <tr :class="row.type === 'month' ? 'bg-slate-100' : ''">
-                            <td x-show="row.type === 'month'" colspan="8" class="py-3 px-4 border-y border-slate-200">
+                            <td x-show="row.type === 'month'" colspan="7" class="py-3 px-4 border-y border-slate-200">
                                 <div class="flex items-center gap-3">
                                     <span class="h-px bg-slate-300 flex-1"></span>
                                     <span class="text-xs font-bold uppercase tracking-wider text-slate-500" x-text="row.label"></span>
                                     <span class="h-px bg-slate-300 flex-1"></span>
                                 </div>
                             </td>
-                            <td x-show="row.type === 'service'" class="text-slate-400 text-xs" x-text="row.item ? `#${row.item.id}` : ''"></td>
                             <td x-show="row.type === 'service'">
                                 <p class="font-medium text-slate-800" x-text="row.item?.musteri_adi"></p>
                                 <p class="text-xs text-slate-400" x-text="row.item?.telefon || ''"></p>
@@ -128,7 +126,7 @@ include __DIR__ . '/layout/header.php';
     <div x-show="showAdd" x-cloak class="modal-backdrop" @click.self="showAdd=false">
         <div class="modal-box max-w-2xl">
             <div class="modal-header">
-                <h3 class="font-semibold text-slate-800" x-text="editId ? `Servis #${editId} Düzenle` : 'Yeni Servis Kaydı'"></h3>
+                <h3 class="font-semibold text-slate-800" x-text="editId ? 'Servis Kaydını Düzenle' : 'Yeni Servis Kaydı'"></h3>
                 <button @click="showAdd=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
             <form @submit.prevent="saveServis()" class="modal-body space-y-4">
@@ -372,7 +370,7 @@ include __DIR__ . '/layout/header.php';
     <div x-show="showDetail" x-cloak class="modal-backdrop" @click.self="showDetail=false">
         <div class="modal-box max-w-xl" x-show="detail">
             <div class="modal-header">
-                <h3 class="font-semibold text-slate-800" x-text="`Servis #${detail?.id}`"></h3>
+                <h3 class="font-semibold text-slate-800">Servis Detayı</h3>
                 <button @click="showDetail=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body space-y-4">
@@ -444,7 +442,11 @@ include __DIR__ . '/layout/header.php';
                                     <span class="font-medium text-emerald-700" x-text="formatCurrency(th.tutar)"></span>
                                     <span class="text-slate-400 ml-2" x-text="formatOdemeYontemi(th.odeme_yontemi)"></span>
                                 </div>
-                                <span class="text-slate-400 text-xs" x-text="formatDate(th.tahsilat_tarihi)"></span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-slate-400 text-xs" x-text="formatDate(th.tahsilat_tarihi)"></span>
+                                    <button type="button" class="btn btn-sm btn-danger py-0.5 px-2 text-xs"
+                                            @click="deleteTahsilat(th.id)">Sil</button>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -795,8 +797,20 @@ function servislerApp() {
             } catch(e) {} finally { this.saving = false; }
         },
 
+        async deleteTahsilat(id) {
+            if (!confirm('Bu tahsilat kaydı silinsin mi? Servis ödeme durumu yeniden hesaplanacak.')) return;
+            try {
+                await api(`api/tahsilatlar.php?id=${id}`, { method: 'DELETE' });
+                showToast('Tahsilat geri alındı.', 'success');
+                if (this.detail) {
+                    this.detail = await api(`api/servisler.php?id=${this.detail.id}`);
+                }
+                await this.loadServisler();
+            } catch(e) {}
+        },
+
         async deleteServis(s) {
-            if (!confirm(`Servis #${s.id} silinsin mi?`)) return;
+            if (!confirm('Bu servis kaydı silinsin mi?')) return;
             try {
                 await api(`api/servisler.php?id=${s.id}`, { method: 'DELETE' });
                 showToast('Servis silindi.', 'success');

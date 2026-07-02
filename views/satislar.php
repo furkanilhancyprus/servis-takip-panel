@@ -174,6 +174,7 @@ include __DIR__ . '/layout/header.php';
                     <div>
                         <label class="form-label">Satış Tarihi</label>
                         <input type="date" class="form-input" x-model="form.satis_tarihi">
+                        <p class="text-xs text-slate-400 mt-1">Bu tarihe göre müşteri otomatik bakım takibine alınır.</p>
                     </div>
                     <!-- Cihaz -->
                     <div>
@@ -395,19 +396,40 @@ include __DIR__ . '/layout/header.php';
                     <div class="space-y-1.5 max-h-48 overflow-y-auto">
                         <template x-for="tk in (detail?.taksitler || [])" :key="tk.id">
                             <div class="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
-                                 :class="tk.odendi ? 'bg-emerald-50' : (new Date(tk.vade_tarihi) < new Date() ? 'bg-red-50' : 'bg-slate-50')">
+                                 :class="Number(tk.odendi) === 1 ? 'bg-emerald-50' : (new Date(tk.vade_tarihi) < new Date() ? 'bg-red-50' : 'bg-slate-50')">
                                 <div class="flex items-center gap-2">
                                     <i class="fas text-xs"
-                                       :class="tk.odendi ? 'fa-check-circle text-emerald-500' : (tk.taksit_no === 0 ? 'fa-hand-holding-dollar text-blue-400' : 'fa-clock text-slate-400')"></i>
+                                       :class="Number(tk.odendi) === 1 ? 'fa-check-circle text-emerald-500' : (tk.taksit_no === 0 ? 'fa-hand-holding-dollar text-blue-400' : 'fa-clock text-slate-400')"></i>
                                     <span x-text="tk.taksit_no === 0 ? 'Peşinat' : `${tk.taksit_no}. Taksit`"></span>
                                     <span class="text-xs text-slate-400" x-text="formatDate(tk.vade_tarihi)"></span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="font-semibold" x-text="formatCurrency(tk.tutar)"></span>
-                                    <button x-show="!tk.odendi && tk.taksit_no > 0"
+                                    <button x-show="Number(tk.odendi) !== 1 && tk.taksit_no > 0"
                                             class="btn btn-sm btn-success py-0.5 px-2 text-xs"
                                             @click="odeTaksit(tk)">Öde</button>
+                                    <button x-show="Number(tk.odendi) === 1 && tk.taksit_no > 0"
+                                            class="btn btn-sm btn-warning py-0.5 px-2 text-xs"
+                                            @click="geriAlTaksit(tk)">Geri Al</button>
                                 </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Tahsilat Geçmişi -->
+                <div x-show="detail?.tahsilatlar?.length > 0">
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tahsilat Geçmişi</p>
+                    <div class="space-y-1.5 max-h-40 overflow-y-auto">
+                        <template x-for="th in (detail?.tahsilatlar || [])" :key="th.id">
+                            <div class="flex items-center justify-between bg-emerald-50 rounded-lg px-3 py-2 text-sm">
+                                <div>
+                                    <span class="font-semibold text-emerald-700" x-text="formatCurrency(th.tutar)"></span>
+                                    <span class="text-slate-400 ml-2" x-text="formatOdemeYontemi(th.odeme_yontemi)"></span>
+                                    <span class="text-slate-400 ml-2" x-text="formatDate(th.tahsilat_tarihi)"></span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-danger py-0.5 px-2 text-xs"
+                                        @click="deleteTahsilat(th.id, 'satis')">Sil</button>
                             </div>
                         </template>
                     </div>
@@ -712,6 +734,30 @@ function satislarApp() {
                 }
                 await this.loadSatislar();
             } catch(e) {} finally { this.saving = false; }
+        },
+
+        async geriAlTaksit(tk) {
+            if (!confirm(`${tk.taksit_no}. taksit ödemesi geri alınsın mı?`)) return;
+            try {
+                await api(`api/tahsilatlar.php?id=${tk.id}&taksit=1`, { method: 'DELETE' });
+                showToast('Taksit ödemesi geri alındı.', 'success');
+                if (this.detail) {
+                    this.detail = await api(`api/satislar.php?id=${this.detail.id}`);
+                }
+                await this.loadSatislar();
+            } catch(e) {}
+        },
+
+        async deleteTahsilat(id, tip = 'satis') {
+            if (!confirm('Bu tahsilat kaydı silinsin mi? Ödeme durumu yeniden hesaplanacak.')) return;
+            try {
+                await api(`api/tahsilatlar.php?id=${id}`, { method: 'DELETE' });
+                showToast('Tahsilat geri alındı.', 'success');
+                if (this.detail) {
+                    this.detail = await api(`api/satislar.php?id=${this.detail.id}`);
+                }
+                await this.loadSatislar();
+            } catch(e) {}
         },
 
         async deleteSatis(s) {

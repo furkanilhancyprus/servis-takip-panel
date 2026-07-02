@@ -207,18 +207,46 @@ include __DIR__ . '/layout/header.php';
     <!-- Charts Row -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        <!-- Aylık Ciro & Tahsilat -->
+        <!-- Aylık Ciro & Kar -->
         <div class="card p-5">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="font-semibold text-slate-800">Aylık Ciro & Tahsilat</h3>
-                <select class="form-select w-24 text-xs py-1.5" x-model="ciroYil" @change="loadCiro()">
-                    <option value="2026">2026</option>
-                    <option value="2025">2025</option>
-                    <option value="2024">2024</option>
-                </select>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div>
+                    <h3 class="font-semibold text-slate-800">Aylık Ciro & Kar</h3>
+                    <p class="text-xs text-slate-400 mt-0.5" x-text="ayLabel + ' özeti'"></p>
+                </div>
+                <input type="month" class="form-input w-40 text-xs py-1.5" x-model="seciliAy" @change="loadDashboard()">
             </div>
-            <div class="relative h-56">
-                <canvas id="ciroChart"></canvas>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                    <p class="text-xs text-blue-500 font-semibold uppercase">Satış</p>
+                    <p class="text-2xl font-bold text-blue-700 mt-1" x-text="ayOzeti.satis_adet || 0"></p>
+                </div>
+                <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
+                    <p class="text-xs text-emerald-600 font-semibold uppercase">Servis</p>
+                    <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="ayOzeti.servis_adet || 0"></p>
+                </div>
+                <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Toplam Ciro</p>
+                    <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(ayOzeti.toplam_ciro || 0)"></p>
+                </div>
+                <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
+                    <p class="text-xs text-amber-600 font-semibold uppercase">Net Kar</p>
+                    <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
+                </div>
+            </div>
+            <div class="h-56 flex items-end gap-1 border-l border-b border-slate-200 px-2 pt-4 pb-2 overflow-x-auto">
+                <template x-for="g in gunlukAyCiro" :key="g.tarih">
+                    <div class="h-full flex flex-col justify-end items-center gap-1 min-w-[18px]" :title="`${g.tarih}: ${formatCurrency(g.ciro)} · ${g.satis_adet} satış, ${g.servis_adet} servis`">
+                        <div class="w-3 rounded-t bg-blue-500 hover:bg-blue-600 transition"
+                             :style="`height:${barHeight(g.ciro)}%`"></div>
+                        <span class="text-[10px] text-slate-400" x-text="g.gun"></span>
+                    </div>
+                </template>
+                <template x-if="gunlukAyCiro.length === 0 || maxGunlukCiro === 0">
+                    <div class="w-full h-full flex items-center justify-center text-sm text-slate-400">
+                        Bu ay için ciro kaydı yok
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -260,8 +288,9 @@ include __DIR__ . '/layout/header.php';
 function dashboardApp() {
     return {
         stats: {}, gecikenler: [], yaklasanlar: [], sonServisler: [],
-        ciroYil: '<?= date('Y') ?>',
-        ciroChart: null,
+        seciliAy: '<?= date('Y-m') ?>',
+        ayOzeti: {},
+        gunlukAyCiro: [],
 
         async init() {
             await this.loadDashboard();
@@ -269,64 +298,29 @@ function dashboardApp() {
 
         async loadDashboard() {
             try {
-                const d = await api(`api/dashboard.php?yil=${this.ciroYil}`);
+                const d = await api(`api/dashboard.php?ay=${this.seciliAy}`);
                 this.stats        = d;
                 this.gecikenler   = d.gecikenler   || [];
                 this.yaklasanlar  = d.yaklasanlar  || [];
                 this.sonServisler = d.sonServisler  || [];
-                this.$nextTick(() => this.renderCiroChart(d.aylikCiro || [], d.aylikTahsilat || []));
+                this.ayOzeti      = d.ayOzeti || {};
+                this.gunlukAyCiro = d.gunlukAyCiro || [];
             } catch(e) {}
         },
 
-        async loadCiro() {
-            try {
-                const d = await api(`api/dashboard.php?yil=${this.ciroYil}`);
-                if (this.ciroChart) {
-                    this.ciroChart.data.datasets[0].data = d.aylikCiro || [];
-                    this.ciroChart.data.datasets[1].data = d.aylikTahsilat || [];
-                    this.ciroChart.update();
-                }
-            } catch(e) {}
+        get ayLabel() {
+            if (!this.seciliAy) return '';
+            const [y, m] = this.seciliAy.split('-').map(Number);
+            return new Date(y, m - 1, 1).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
         },
 
-        renderCiroChart(ciroData, tahsilatData) {
-            const ctx = document.getElementById('ciroChart');
-            if (!ctx) return;
-            if (this.ciroChart) this.ciroChart.destroy();
-            this.ciroChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'],
-                    datasets: [
-                        {
-                            label: 'Ciro (₺)',
-                            data: ciroData,
-                            backgroundColor: 'rgba(37,99,235,.15)',
-                            borderColor: '#2563eb',
-                            borderWidth: 2,
-                            borderRadius: 6,
-                            borderSkipped: false,
-                        },
-                        {
-                            label: 'Tahsilat (₺)',
-                            data: tahsilatData,
-                            backgroundColor: 'rgba(5,150,105,.15)',
-                            borderColor: '#059669',
-                            borderWidth: 2,
-                            borderRadius: 6,
-                            borderSkipped: false,
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: true, position: 'top', labels: { font: { size: 11 } } } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-                        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, callback: v => '₺' + v.toLocaleString('tr-TR') } }
-                    }
-                }
-            });
+        get maxGunlukCiro() {
+            return Math.max(0, ...this.gunlukAyCiro.map(g => Number(g.ciro || 0)));
+        },
+
+        barHeight(value) {
+            if (!this.maxGunlukCiro) return 2;
+            return Math.max(4, Math.round((Number(value || 0) / this.maxGunlukCiro) * 100));
         },
 
         odemeBadgeClass(d) {

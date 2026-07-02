@@ -10,6 +10,10 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
 $stpLoggedIn = !empty($_SESSION['firma_id']);
+$stpAccountLabel = trim((string)($_SESSION['firma_adi'] ?? $_SESSION['ad_soyad'] ?? 'Hesabım'));
+if ($stpAccountLabel === '') {
+    $stpAccountLabel = 'Hesabım';
+}
 
 function stp_app_href(string $guestHref): string {
     global $stpLoggedIn;
@@ -19,6 +23,19 @@ function stp_app_href(string $guestHref): string {
 function stp_app_label(string $guestLabel): string {
     global $stpLoggedIn;
     return $stpLoggedIn ? 'Panele Git' : $guestLabel;
+}
+
+function stp_account_label(): string {
+    global $stpAccountLabel;
+    return $stpAccountLabel;
+}
+
+function stp_account_initial(): string {
+    $label = stp_account_label();
+    if (preg_match('/^\s*(.)/u', $label, $m)) {
+        return strtoupper($m[1]);
+    }
+    return 'H';
 }
 
 function stp_download_exists(string $relativePath): bool {
@@ -85,6 +102,11 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
 
         /* Smooth scroll */
         html { scroll-behavior: smooth; }
+
+        @media (max-width: 420px) {
+            .landing-brand-text { display: none; }
+            .landing-nav-cta { gap: .5rem; }
+        }
     </style>
 </head>
 <body class="bg-white text-slate-800">
@@ -100,7 +122,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
                     <i class="fas fa-clipboard-check text-white"></i>
                 </div>
-                <div>
+                <div class="landing-brand-text">
                     <span class="font-bold text-slate-900 text-lg leading-none">Servis Takip</span>
                     <span class="text-blue-600 font-bold text-lg leading-none"> Panel</span>
                 </div>
@@ -115,15 +137,20 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
             </div>
 
             <!-- CTA -->
-            <div class="flex items-center gap-3">
+            <div class="landing-nav-cta flex items-center gap-3">
                 <?php if ($stpLoggedIn): ?>
-                    <a href="index.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Panel</a>
+                    <a href="index.php" class="inline-flex items-center gap-2 text-sm font-semibold bg-slate-900 hover:bg-slate-800 text-white px-3 sm:px-4 py-2 rounded-lg transition max-w-[190px]">
+                        <span class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                            <?= htmlspecialchars(stp_account_initial()) ?>
+                        </span>
+                        <span class="truncate"><?= htmlspecialchars(stp_account_label()) ?></span>
+                    </a>
                 <?php else: ?>
-                    <a href="giris.php" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition hidden sm:block">Giriş Yap</a>
+                    <a href="giris.php" class="text-sm font-semibold text-slate-700 hover:text-blue-600 transition whitespace-nowrap">Giriş Yap</a>
+                    <a href="kayit.php?paket=ucretsiz" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg transition whitespace-nowrap">
+                        Ücretsiz Başla
+                    </a>
                 <?php endif; ?>
-                <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
-                    <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
-                </a>
             </div>
         </div>
     </div>

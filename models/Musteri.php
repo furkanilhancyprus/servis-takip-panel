@@ -80,16 +80,16 @@ class Musteri extends Model {
 
         // Satışlar + cihaz bilgisi + taksit özeti
         $musteri['satislar'] = $this->db->fetchAll("
-            SELECT sa.id, sa.created_at, sa.toplam_tutar, sa.odeme_turu,
+            SELECT sa.id, sa.created_at, sa.satis_tarihi, sa.toplam_tutar, sa.odeme_turu,
                    sa.taksit_sayisi, sa.pesinat, sa.seri_no,
                    p.parca_adi as cihaz_adi, p.marka as cihaz_marka,
-                   (SELECT COUNT(*) FROM taksitler t WHERE t.satis_id = sa.id AND t.taksit_no > 0) as toplam_taksit,
-                   (SELECT COUNT(*) FROM taksitler t WHERE t.satis_id = sa.id AND t.taksit_no > 0 AND t.odendi = 1) as odenen_taksit,
-                   (SELECT COALESCE(SUM(t.tutar),0) FROM taksitler t WHERE t.satis_id = sa.id AND t.odendi = 0) as kalan_tutar
+                   (SELECT COUNT(*) FROM taksitler t WHERE t.satis_id = sa.id AND t.deleted_at IS NULL AND t.taksit_no > 0) as toplam_taksit,
+                   (SELECT COUNT(*) FROM taksitler t WHERE t.satis_id = sa.id AND t.deleted_at IS NULL AND t.taksit_no > 0 AND t.odendi = 1) as odenen_taksit,
+                   (SELECT COALESCE(SUM(t.tutar),0) FROM taksitler t WHERE t.satis_id = sa.id AND t.deleted_at IS NULL AND t.odendi = 0 AND t.taksit_no > 0) as kalan_tutar
             FROM satislar sa
             LEFT JOIN parcalar p ON sa.cihaz_id = p.id AND p.deleted_at IS NULL
             WHERE sa.musteri_id = ? AND sa.firma_id = ? AND sa.deleted_at IS NULL
-            ORDER BY sa.created_at DESC
+            ORDER BY sa.satis_tarihi DESC, sa.id DESC
         ", [$id, $this->firmaId]);
 
         foreach ($musteri['satislar'] as &$satis) {
@@ -108,10 +108,14 @@ class Musteri extends Model {
                 : trim((string)($satis['cihaz_marka'] ? $satis['cihaz_marka'] . ' ' : '') . (string)($satis['cihaz_adi'] ?? ''));
 
             $satis['taksitler'] = $this->db->fetchAll(
-                "SELECT taksit_no, tutar, vade_tarihi, odendi, odeme_tarihi
+                "SELECT id, taksit_no, tutar, vade_tarihi, CAST(odendi AS INTEGER) AS odendi, odeme_tarihi
                  FROM taksitler WHERE satis_id = ? AND deleted_at IS NULL ORDER BY taksit_no ASC",
                 [$satis['id']]
             );
+            foreach ($satis['taksitler'] as &$taksit) {
+                $taksit['odendi'] = (int)($taksit['odendi'] ?? 0);
+            }
+            unset($taksit);
         }
 
         $musteri['cihazlar'] = $this->db->fetchAll("

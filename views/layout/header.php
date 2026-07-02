@@ -447,7 +447,7 @@
                 <i class="fas fa-boxes-stacked icon"></i> Stok
             </a>
             <a href="?page=raporlar" class="sidebar-link <?= ($activePage ?? '') === 'raporlar' ? 'active' : '' ?>">
-                <i class="fas fa-file-chart-column icon"></i> Raporlar
+                <i class="fas fa-chart-column icon"></i> Raporlar
             </a>
 
             <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-2 mt-3">Sistem</div>
@@ -507,7 +507,7 @@
             <i class="fas fa-boxes-stacked"></i><span>Stok</span>
         </a>
         <a href="?page=raporlar" class="<?= ($activePage ?? '') === 'raporlar' ? 'active' : '' ?>">
-            <i class="fas fa-file-chart-column"></i><span>Rapor</span>
+            <i class="fas fa-chart-column"></i><span>Rapor</span>
         </a>
         <a href="?page=ayarlar" class="<?= ($activePage ?? '') === 'ayarlar' ? 'active' : '' ?>">
             <i class="fas fa-gear"></i><span>Ayar</span>

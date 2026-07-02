@@ -37,6 +37,30 @@ class Servis extends Model {
             }
         }
 
+        return $this->withChronologicalSequence($rows);
+    }
+
+    private function withChronologicalSequence(array $rows): array {
+        $ordered = $rows;
+        usort($ordered, function ($a, $b) {
+            $dateA = strtotime((string)($a['tamamlanma_tarihi'] ?? $a['created_at'] ?? '')) ?: 0;
+            $dateB = strtotime((string)($b['tamamlanma_tarihi'] ?? $b['created_at'] ?? '')) ?: 0;
+            if ($dateA === $dateB) {
+                return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+            }
+            return $dateA <=> $dateB;
+        });
+
+        $sequenceById = [];
+        foreach ($ordered as $index => $row) {
+            $sequenceById[(int)$row['id']] = $index + 1;
+        }
+
+        foreach ($rows as &$row) {
+            $row['sira_no'] = $sequenceById[(int)$row['id']] ?? null;
+        }
+        unset($row);
+
         return $rows;
     }
 

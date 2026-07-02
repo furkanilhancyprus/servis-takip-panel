@@ -54,9 +54,13 @@ class Satis extends Model {
             [$id, $this->firmaId]
         );
         $satis['taksitler'] = $this->db->fetchAll(
-            "SELECT * FROM taksitler WHERE satis_id=? AND firma_id=? AND deleted_at IS NULL ORDER BY taksit_no ASC",
+            "SELECT *, CAST(odendi AS INTEGER) AS odendi FROM taksitler WHERE satis_id=? AND firma_id=? AND deleted_at IS NULL ORDER BY taksit_no ASC",
             [$id, $this->firmaId]
         );
+        foreach ($satis['taksitler'] as &$taksit) {
+            $taksit['odendi'] = (int)($taksit['odendi'] ?? 0);
+        }
+        unset($taksit);
 
         return $satis;
     }
@@ -148,6 +152,8 @@ class Satis extends Model {
             ", [$this->firmaId, $musteriId, $cihazId, $id, $seriNo, $tarih, $this->uuid()]);
         }
 
+        $this->ensureBakimTakibi($musteriId, $tarih);
+
         $pdo->commit();
         return $id;
         } catch (Throwable $e) {
@@ -182,5 +188,41 @@ class Satis extends Model {
             $ciro[] = (float)$total;
         }
         return $ciro;
+    }
+
+    private function ensureBakimTakibi(int $musteriId, string $satisTarihi): void {
+        $bakim = $this->db->fetchOne(
+            "SELECT id, periyot_ay FROM periyodik_bakimlar WHERE musteri_id=? AND deleted_at IS NULL",
+            [$musteriId]
+        );
+
+        $periyot = $bakim ? (int)($bakim['periyot_ay'] ?? 0) : 0;
+        if ($periyot <= 0) {
+            $periyot = (int)$this->db->fetchColumn(
+                "SELECT deger FROM ayarlar WHERE firma_id=? AND anahtar='varsayilan_bakim_periyodu'",
+                [$this->firmaId]
+            );
+        }
+        if ($periyot <= 0) {
+            $periyot = 6;
+        }
+
+        $sonraki = date('Y-m-d', strtotime($satisTarihi . " +{$periyot} months"));
+
+        if ($bakim) {
+            $this->db->query(
+                "UPDATE periyodik_bakimlar
+                 SET aktif=1, periyot_ay=?, son_bakim_tarihi=?, sonraki_bakim_tarihi=?, synced_at=NULL
+                 WHERE id=?",
+                [$periyot, $satisTarihi, $sonraki, (int)$bakim['id']]
+            );
+            return;
+        }
+
+        $this->db->execute(
+            "INSERT INTO periyodik_bakimlar (musteri_id, aktif, periyot_ay, son_bakim_tarihi, sonraki_bakim_tarihi, uuid)
+             VALUES (?, 1, ?, ?, ?, ?)",
+            [$musteriId, $periyot, $satisTarihi, $sonraki, $this->uuid()]
+        );
     }
 }

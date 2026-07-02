@@ -409,7 +409,7 @@ include __DIR__ . '/layout/header.php';
                                                    x-show="satis.satis_ozeti"
                                                    x-text="satis.satis_ozeti"></p>
                                                 <p class="text-xs text-slate-400"
-                                                   x-text="'Satış: '+(satis.created_at||'').substring(0,10)+(satis.seri_no?' · Seri: '+satis.seri_no:'')"></p>
+                                                   x-text="'Satış: '+(satis.satis_tarihi || satis.created_at || '').substring(0,10)+(satis.seri_no?' · Seri: '+satis.seri_no:'')"></p>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
@@ -440,16 +440,22 @@ include __DIR__ . '/layout/header.php';
                                                     <div class="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
                                                         <div class="flex items-center gap-2">
                                                             <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                                                                  :class="t.odendi ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'">
-                                                                <i :class="t.odendi ? 'fas fa-check' : (t.taksit_no===0 ? 'fas fa-coins' : 'far fa-clock')"></i>
+                                                                  :class="Number(t.odendi) === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                                                                <i :class="Number(t.odendi) === 1 ? 'fas fa-check' : (t.taksit_no===0 ? 'fas fa-coins' : 'far fa-clock')"></i>
                                                             </span>
                                                             <span class="text-slate-600" x-text="t.taksit_no===0 ? 'Peşinat' : t.taksit_no+'. Taksit'"></span>
                                                             <span class="text-slate-400" x-text="t.vade_tarihi ? '· '+t.vade_tarihi.substring(0,10) : ''"></span>
                                                         </div>
                                                         <div class="flex items-center gap-2">
                                                             <span class="font-semibold text-slate-700" x-text="formatCurrency(t.tutar)"></span>
-                                                            <span x-show="t.odendi" class="badge badge-green" style="font-size:10px;padding:2px 6px;">Ödendi</span>
-                                                            <span x-show="!t.odendi" class="badge badge-red" style="font-size:10px;padding:2px 6px;">Bekliyor</span>
+                                                            <span x-show="Number(t.odendi) === 1" class="badge badge-green" style="font-size:10px;padding:2px 6px;">Ödendi</span>
+                                                            <span x-show="Number(t.odendi) !== 1" class="badge badge-red" style="font-size:10px;padding:2px 6px;">Bekliyor</span>
+                                                            <button x-show="Number(t.odendi) === 1 && t.taksit_no > 0"
+                                                                    type="button"
+                                                                    class="btn btn-sm btn-warning py-0.5 px-2 text-xs"
+                                                                    @click="geriAlTaksit(t, satis.id)">
+                                                                Geri Al
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -488,7 +494,7 @@ include __DIR__ . '/layout/header.php';
                                         <i class="fas fa-wrench text-blue-500 text-xs"></i>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <p class="font-medium text-slate-800 text-sm" x-text="s.servis_tipi || 'Genel Servis'"></p>
+                                        <p class="font-medium text-slate-800 text-sm" x-text="formatTip(s.servis_tipi)"></p>
                                         <p class="text-xs text-slate-500 mt-0.5 truncate"
                                            x-show="s.servis_ozeti"
                                            x-text="s.servis_ozeti"></p>
@@ -798,7 +804,24 @@ function musterilerApp() {
             } catch(e) {}
         },
 
+        async geriAlTaksit(taksit, satisId) {
+            if (!confirm(`${taksit.taksit_no}. taksit ödemesi geri alınsın mı?`)) return;
+            try {
+                await api(`api/tahsilatlar.php?id=${taksit.id}&taksit=1`, { method: 'DELETE' });
+                showToast('Taksit ödemesi geri alındı.', 'success');
+                if (this.detail?.id) {
+                    this.detail = await api(`api/musteriler.php?id=${this.detail.id}`);
+                }
+            } catch(e) {}
+        },
+
         formatCurrency,
+
+        formatTip(tip) {
+            if (tip === 'periyodik_bakim') return 'Periyodik Bakım';
+            if (tip === 'ariza') return 'Arıza';
+            return tip || 'Genel Servis';
+        },
     }
 }
 </script>
