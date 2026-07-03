@@ -234,19 +234,12 @@ include __DIR__ . '/layout/header.php';
                     <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
                 </div>
             </div>
-            <div class="h-56 flex items-end gap-1 border-l border-b border-slate-200 px-2 pt-4 pb-2 overflow-x-auto">
-                <template x-for="g in gunlukAyCiro" :key="g.tarih">
-                    <div class="h-full flex flex-col justify-end items-center gap-1 min-w-[18px]" :title="`${g.tarih}: ${formatCurrency(g.ciro)} · ${g.satis_adet} satış, ${g.servis_adet} servis`">
-                        <div class="w-3 rounded-t bg-blue-500 hover:bg-blue-600 transition"
-                             :style="`height:${barHeight(g.ciro)}%`"></div>
-                        <span class="text-[10px] text-slate-400" x-text="g.gun"></span>
-                    </div>
-                </template>
-                <template x-if="gunlukAyCiro.length === 0 || maxGunlukCiro === 0">
-                    <div class="w-full h-full flex items-center justify-center text-sm text-slate-400">
-                        Bu ay için ciro kaydı yok
-                    </div>
-                </template>
+            <div class="relative h-64">
+                <canvas id="dailyCiroChart"></canvas>
+                <div x-show="gunlukAyCiro.length === 0 || maxGunlukCiro === 0"
+                     class="absolute inset-0 flex items-center justify-center text-sm text-slate-400 pointer-events-none">
+                    Bu ay için ciro kaydı yok
+                </div>
             </div>
         </div>
 
@@ -291,6 +284,7 @@ function dashboardApp() {
         seciliAy: '<?= date('Y-m') ?>',
         ayOzeti: {},
         gunlukAyCiro: [],
+        dailyChart: null,
 
         async init() {
             await this.loadDashboard();
@@ -305,6 +299,7 @@ function dashboardApp() {
                 this.sonServisler = d.sonServisler  || [];
                 this.ayOzeti      = d.ayOzeti || {};
                 this.gunlukAyCiro = d.gunlukAyCiro || [];
+                this.$nextTick(() => this.renderDailyCiroChart());
             } catch(e) {}
         },
 
@@ -321,6 +316,66 @@ function dashboardApp() {
         barHeight(value) {
             if (!this.maxGunlukCiro) return 2;
             return Math.max(4, Math.round((Number(value || 0) / this.maxGunlukCiro) * 100));
+        },
+
+        renderDailyCiroChart() {
+            const ctx = document.getElementById('dailyCiroChart');
+            if (!ctx) return;
+            if (this.dailyChart) this.dailyChart.destroy();
+
+            this.dailyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: this.gunlukAyCiro.map(g => String(g.gun)),
+                    datasets: [{
+                        label: 'Günlük Ciro',
+                        data: this.gunlukAyCiro.map(g => Number(g.ciro || 0)),
+                        backgroundColor: this.gunlukAyCiro.map(g => Number(g.ciro || 0) > 0 ? '#2563eb' : 'rgba(148,163,184,.22)'),
+                        hoverBackgroundColor: '#1d4ed8',
+                        borderRadius: 6,
+                        maxBarThickness: 18,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: items => {
+                                    const row = this.gunlukAyCiro[items[0].dataIndex] || {};
+                                    return formatDate(row.tarih);
+                                },
+                                label: item => `Ciro: ${formatCurrency(item.raw)}`,
+                                afterBody: items => {
+                                    const row = this.gunlukAyCiro[items[0].dataIndex] || {};
+                                    return [
+                                        `Satış: ${row.satis_adet || 0}`,
+                                        `Servis: ${row.servis_adet || 0}`,
+                                    ];
+                                },
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#eef2f7' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: value => Number(value || 0).toLocaleString('tr-TR') + ' ₺',
+                            },
+                        },
+                    },
+                },
+            });
         },
 
         odemeBadgeClass(d) {

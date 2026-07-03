@@ -4,6 +4,14 @@ $activePage = 'servisler';
 include __DIR__ . '/layout/header.php';
 ?>
 
+<style>
+@media (max-width: 640px) {
+    .service-operation-row {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+
 <div x-data="servislerApp()" x-init="init()">
 
     <!-- Toolbar -->
@@ -44,6 +52,7 @@ include __DIR__ . '/layout/header.php';
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th class="text-center">Sıra</th>
                         <th>Müşteri</th>
                         <th>Servis Tipi</th>
                         <th>Tarih</th>
@@ -55,24 +64,28 @@ include __DIR__ . '/layout/header.php';
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="7" class="text-center py-12 text-slate-400">
+                        <tr><td colspan="8" class="text-center py-12 text-slate-400">
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
                     <template x-if="!loading && servisler.length === 0">
-                        <tr><td colspan="7" class="text-center py-12 text-slate-400">
+                        <tr><td colspan="8" class="text-center py-12 text-slate-400">
                             <i class="fas fa-wrench text-3xl mb-2 block text-slate-200"></i>
                             Servis kaydı bulunamadı
                         </td></tr>
                     </template>
                     <template x-for="row in groupedServisRows" :key="row.key">
                         <tr :class="row.type === 'month' ? 'bg-slate-100' : ''">
-                            <td x-show="row.type === 'month'" colspan="7" class="py-3 px-4 border-y border-slate-200">
+                            <td x-show="row.type === 'month'" colspan="8" class="py-3 px-4 border-y border-slate-200">
                                 <div class="flex items-center gap-3">
                                     <span class="h-px bg-slate-300 flex-1"></span>
                                     <span class="text-xs font-bold uppercase tracking-wider text-slate-500" x-text="row.label"></span>
                                     <span class="h-px bg-slate-300 flex-1"></span>
                                 </div>
+                            </td>
+                            <td x-show="row.type === 'service'" class="text-center">
+                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold"
+                                      x-text="monthlySequenceNo(row.item)"></span>
                             </td>
                             <td x-show="row.type === 'service'">
                                 <p class="font-medium text-slate-800" x-text="row.item?.musteri_adi"></p>
@@ -175,7 +188,7 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Servis Tipi <span class="text-red-500">*</span></label>
-                        <select class="form-select" x-model="form.servis_tipi" required>
+                        <select class="form-select" x-model="form.servis_tipi">
                             <option value="">Seçiniz...</option>
                             <option value="ariza">Arıza</option>
                             <option value="periyodik_bakim">Periyodik Bakım</option>
@@ -225,8 +238,8 @@ include __DIR__ . '/layout/header.php';
                     </div>
                     <div class="space-y-2">
                         <template x-for="(islem, i) in form.islemler" :key="i">
-                            <div class="flex gap-2">
-                                <div class="flex-1">
+                            <div class="service-operation-row grid gap-2 items-start" style="grid-template-columns:minmax(220px,1fr) 9rem 2.5rem;">
+                                <div class="min-w-0">
                                     <select class="form-select" x-model="islem.islem" @change="applyStandartFiyat(islem)">
                                         <option value="">İşlem seçiniz...</option>
                                         <template x-for="si in standartIslemler" :key="si.id">
@@ -239,7 +252,7 @@ include __DIR__ . '/layout/header.php';
                                            placeholder="Manuel işlem adı"
                                            x-model="islem.manuel_islem">
                                 </div>
-                                <input type="number" class="form-input w-32" placeholder="Tutar (₺)" step="0.01" min="0"
+                                <input type="number" class="form-input" placeholder="Tutar (₺)" step="0.01" min="0"
                                        x-model="islem.tutar" @input="calcTotal()">
                                 <button type="button" class="btn btn-danger btn-icon" @click="form.islemler.splice(i,1); calcTotal()">
                                     <i class="fas fa-times text-xs"></i>
@@ -274,10 +287,6 @@ include __DIR__ . '/layout/header.php';
                                         </div>
                                         <input type="number" class="form-input w-20 text-center text-slate-400" min="1"
                                                x-model="p.miktar" @input="calcTotal()" title="Adet">
-                                        <div class="w-28 text-right pr-1">
-                                            <span class="text-slate-400 text-xs"
-                                                  x-text="'Maliyet: ' + formatCurrency(p.birim_fiyat * (parseInt(p.miktar)||1))"></span>
-                                        </div>
                                     </div>
                                 </template>
 
@@ -486,7 +495,7 @@ include __DIR__ . '/layout/header.php';
                     <label class="form-label">Tahsilat Tutarı <span class="text-red-500">*</span></label>
                     <input type="number" class="form-input" step="0.01" min="0.01"
                            :max="tahsilatForm.kalan"
-                           x-model="tahsilatForm.tutar" required>
+                           x-model="tahsilatForm.tutar">
                     <div class="flex gap-2 mt-2">
                         <button type="button" class="btn btn-sm btn-secondary flex-1"
                                 @click="tahsilatForm.tutar = tahsilatForm.kalan">
@@ -562,6 +571,22 @@ function servislerApp() {
                 rows.push({ type: 'service', key: `service-${s.id}`, item: s });
             });
             return rows;
+        },
+
+        monthlySequenceNo(service) {
+            if (!service) return '';
+            const month = this.monthKey(service.tamamlanma_tarihi || service.created_at);
+            const sameMonth = this.servisler
+                .filter(s => this.monthKey(s.tamamlanma_tarihi || s.created_at) === month)
+                .slice()
+                .sort((a, b) => {
+                    const dateA = String(a.tamamlanma_tarihi || a.created_at || '');
+                    const dateB = String(b.tamamlanma_tarihi || b.created_at || '');
+                    if (dateA === dateB) return (Number(a.id) || 0) - (Number(b.id) || 0);
+                    return dateA.localeCompare(dateB);
+                });
+            const index = sameMonth.findIndex(s => String(s.id) === String(service.id));
+            return index >= 0 ? index + 1 : '';
         },
 
         async init() {

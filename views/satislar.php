@@ -297,6 +297,23 @@ include __DIR__ . '/layout/header.php';
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label class="form-label">İlk Taksit Tarihi</label>
+                        <input type="date" class="form-input" x-model="form.ilk_taksit_tarihi">
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-secondary"
+                                    @click="form.ilk_taksit_tarihi = form.satis_tarihi || todayDate()">
+                                Satış günü
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary"
+                                    @click="setIlkTaksitSonrakiAy()">
+                                1 ay sonra
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Boş bırakılırsa ilk taksit satış tarihinde başlar.
+                        </p>
+                    </div>
                     <!-- Taksit Özeti -->
                     <div class="bg-white rounded-lg p-3 text-sm space-y-1.5 border border-purple-100">
                         <div class="flex justify-between">
@@ -314,6 +331,10 @@ include __DIR__ . '/layout/header.php';
                         <div class="flex justify-between font-bold border-t border-slate-100 pt-1.5">
                             <span>Aylık Taksit:</span>
                             <span class="text-purple-700" x-text="formatCurrency(taksitTutari)"></span>
+                        </div>
+                        <div class="flex justify-between border-t border-slate-100 pt-1.5">
+                            <span class="text-slate-500">İlk Taksit:</span>
+                            <span class="font-semibold text-slate-700" x-text="formatDate(form.ilk_taksit_tarihi || form.satis_tarihi)"></span>
                         </div>
                     </div>
                 </div>
@@ -480,7 +501,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <label class="form-label">Tutar <span class="text-red-500">*</span></label>
                     <input type="number" class="form-input" step="0.01" min="0.01"
-                           :max="tahsilatForm.kalan" x-model="tahsilatForm.tutar" required>
+                           :max="tahsilatForm.kalan" x-model="tahsilatForm.tutar">
                     <button type="button" class="btn btn-sm btn-secondary mt-2 w-full"
                             @click="tahsilatForm.tutar = tahsilatForm.kalan">Tamamını Al</button>
                 </div>
@@ -564,7 +585,7 @@ function satislarApp() {
             musteri_id: '', satis_tarihi: new Date().toISOString().split('T')[0],
             cihaz_id: '', seri_no: '',
             kalemler: [], notlar: '', toplam_tutar: 0,
-            odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0,
+            odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0, ilk_taksit_tarihi: '',
         },
         tahsilatForm: {
             musteri_id: '', kaynak_id: '', kaynak_tip: 'satis',
@@ -613,7 +634,7 @@ function satislarApp() {
                 musteri_id: '', satis_tarihi: new Date().toISOString().split('T')[0],
                 cihaz_id: '', seri_no: '',
                 kalemler: [], notlar: '', toplam_tutar: 0,
-                odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0,
+                odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0, ilk_taksit_tarihi: '',
             };
             this.musteriSearch = ''; this.selectedMusteriName = '';
             this.taksitTutari  = 0;
@@ -649,6 +670,19 @@ function satislarApp() {
             const kalan = Math.max(0, (parseFloat(this.form.toplam_tutar) || 0) - (parseFloat(this.form.pesinat) || 0));
             const n     = parseInt(this.form.taksit_sayisi) || 1;
             this.taksitTutari = n > 0 ? +(kalan / n).toFixed(2) : 0;
+        },
+
+        todayDate() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        },
+
+        setIlkTaksitSonrakiAy() {
+            const base = this.form.satis_tarihi || this.todayDate();
+            const [year, month, day] = base.split('-').map(Number);
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const next = new Date(year, month, Math.min(day, lastDay));
+            this.form.ilk_taksit_tarihi = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
         },
 
         async saveSatis() {

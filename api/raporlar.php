@@ -5,6 +5,7 @@ require_once ROOT . '/models/Servis.php';
 require_once ROOT . '/models/Parca.php';
 require_once ROOT . '/models/PeriyodikBakim.php';
 require_once ROOT . '/models/Ayarlar.php';
+require_once ROOT . '/models/Satis.php';
 
 $tip = $_GET['tip'] ?? '';
 
@@ -174,6 +175,84 @@ $tarih = date('Ymd_His');
 
 switch ($tip) {
 
+    case 'aylik_trend':
+        header('Content-Type: application/json; charset=utf-8');
+        $db = Database::getInstance();
+        $fid = $_SESSION['firma_id'];
+        $yil = isset($_GET['yil']) ? (int)$_GET['yil'] : (int)date('Y');
+        if ($yil < 2000 || $yil > 2100) {
+            $yil = (int)date('Y');
+        }
+        $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
+        $satisModel = new Satis();
+
+        $rows = [];
+        for ($ay = 1; $ay <= 12; $ay++) {
+            $ayNo = str_pad((string)$ay, 2, '0', STR_PAD_LEFT);
+            $baslangic = "{$yil}-{$ayNo}-01";
+            $bitis = date('Y-m-t', strtotime($baslangic));
+
+            $satis = $db->fetchOne("
+                SELECT COUNT(*) AS adet
+                FROM satislar
+                WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ", [$fid, $baslangic, $bitis]);
+
+            $servis = $db->fetchOne("
+                SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+                FROM servisler
+                WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ", [$fid, $baslangic, $bitis]);
+
+            $tahsilat = (float)$db->fetchColumn("
+                SELECT COALESCE(SUM(tutar),0)
+                FROM tahsilatlar
+                WHERE firma_id=? AND deleted_at IS NULL AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ", [$fid, $baslangic, $bitis]);
+
+            $satisMaliyet = $satisModel->getMaliyetByDateRange($baslangic, $bitis, $usdKur);
+
+            $servisMaliyet = (float)$db->fetchColumn("
+                SELECT COALESCE(SUM(
+                    sp.miktar
+                    * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                    * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
+                ),0)
+                FROM servis_parcalari sp
+                JOIN servisler s ON s.id=sp.servis_id AND s.deleted_at IS NULL
+                LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
+                WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ", [$usdKur, $fid, $baslangic, $bitis]);
+
+            $satisCiro = $satisModel->getCiroByDateRange($baslangic, $bitis);
+            $servisCiro = (float)($servis['ciro'] ?? 0);
+            $toplamCiro = $satisCiro + $servisCiro;
+            $toplamMaliyet = $satisMaliyet + $servisMaliyet;
+
+            $rows[] = [
+                'ay' => $ayNo,
+                'label' => ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][$ay - 1],
+                'satis_adet' => (int)($satis['adet'] ?? 0),
+                'servis_adet' => (int)($servis['adet'] ?? 0),
+                'satis_ciro' => $satisCiro,
+                'servis_ciro' => $servisCiro,
+                'toplam_ciro' => $toplamCiro,
+                'tahsilat' => $tahsilat,
+                'toplam_maliyet' => $toplamMaliyet,
+                'net_kar' => $toplamCiro - $toplamMaliyet,
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'yil' => $yil,
+                'usd_try' => $usdKur,
+                'aylar' => $rows,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+
     case 'kar_ozet':
         header('Content-Type: application/json; charset=utf-8');
         $db = Database::getInstance();
@@ -181,9 +260,10 @@ switch ($tip) {
         $baslangic = $_GET['baslangic'] ?? date('Y-m-01');
         $bitis = $_GET['bitis'] ?? date('Y-m-d');
         $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
+        $satisModel = new Satis();
 
         $satis = $db->fetchOne("
-            SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+            SELECT COUNT(*) AS adet
             FROM satislar
             WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
         ", [$fid, $baslangic, $bitis]);
@@ -194,17 +274,7 @@ switch ($tip) {
             WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
         ", [$fid, $baslangic, $bitis]);
 
-        $satisMaliyet = (float)$db->fetchColumn("
-            SELECT COALESCE(SUM(
-                sk.miktar
-                * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-                * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
-            ),0)
-            FROM satis_kalemleri sk
-            JOIN satislar s ON s.id=sk.satis_id AND s.deleted_at IS NULL
-            LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
-            WHERE s.firma_id=? AND sk.deleted_at IS NULL AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
-        ", [$usdKur, $fid, $baslangic, $bitis]);
+        $satisMaliyet = $satisModel->getMaliyetByDateRange($baslangic, $bitis, $usdKur);
 
         $servisMaliyet = (float)$db->fetchColumn("
             SELECT COALESCE(SUM(
@@ -218,7 +288,7 @@ switch ($tip) {
             WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
         ", [$usdKur, $fid, $baslangic, $bitis]);
 
-        $satisCiro = (float)($satis['ciro'] ?? 0);
+        $satisCiro = $satisModel->getCiroByDateRange($baslangic, $bitis);
         $servisCiro = (float)($servis['ciro'] ?? 0);
         $toplamCiro = $satisCiro + $servisCiro;
         $toplamMaliyet = $satisMaliyet + $servisMaliyet;

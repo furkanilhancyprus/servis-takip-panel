@@ -192,7 +192,7 @@ include __DIR__ . '/layout/header.php';
                         <span x-text="form.is_cihaz ? 'Cihaz Adı' : 'Parça Adı'"></span>
                         <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" class="form-input" x-model="form.parca_adi" required>
+                    <input type="text" class="form-input" x-model="form.parca_adi">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>

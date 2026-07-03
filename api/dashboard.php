@@ -56,7 +56,7 @@ for ($i = 0; $i < 12; $i++) {
 $aylikTahsilat = $tahsilat->getAylikTahsilat($yil);
 
 $aySatis = $_db->fetchOne("
-    SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+    SELECT COUNT(*) AS adet
     FROM satislar
     WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
 ", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
@@ -67,17 +67,7 @@ $ayServis = $_db->fetchOne("
     WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
 ", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
 
-$satisMaliyet = (float)$_db->fetchColumn("
-    SELECT COALESCE(SUM(
-        sk.miktar
-        * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-        * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE 0 END
-    ),0)
-    FROM satis_kalemleri sk
-    JOIN satislar s ON s.id=sk.satis_id AND s.deleted_at IS NULL
-    LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
-    WHERE s.firma_id=? AND sk.deleted_at IS NULL AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
-", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
+$satisMaliyet = $satis->getMaliyetByDateRange($ayBaslangic, $ayBitis, 0);
 
 $servisMaliyet = (float)$_db->fetchColumn("
     SELECT COALESCE(SUM(
@@ -104,16 +94,40 @@ for ($gun = 1; $gun <= $gunSayisi; $gun++) {
     ];
 }
 
-$gunlukSatis = $_db->fetchAll("
-    SELECT DATE(satis_tarihi) AS tarih, COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+$gunlukSatisAdet = $_db->fetchAll("
+    SELECT DATE(satis_tarihi) AS tarih, COUNT(*) AS adet
     FROM satislar
     WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
     GROUP BY DATE(satis_tarihi)
 ", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
-foreach ($gunlukSatis as $row) {
+foreach ($gunlukSatisAdet as $row) {
     $tarih = $row['tarih'];
     if (!isset($gunlukMap[$tarih])) continue;
     $gunlukMap[$tarih]['satis_adet'] = (int)$row['adet'];
+}
+
+$gunlukSatisCiro = $_db->fetchAll("
+    SELECT tarih, COALESCE(SUM(ciro),0) AS ciro
+    FROM (
+        SELECT DATE(satis_tarihi) AS tarih, COALESCE(SUM(toplam_tutar),0) AS ciro
+        FROM satislar
+        WHERE firma_id=? AND deleted_at IS NULL AND odeme_turu <> 'taksitli'
+          AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+        GROUP BY DATE(satis_tarihi)
+        UNION ALL
+        SELECT DATE(t.vade_tarihi) AS tarih, COALESCE(SUM(t.tutar),0) AS ciro
+        FROM taksitler t
+        JOIN satislar s ON s.id=t.satis_id AND s.deleted_at IS NULL
+        WHERE s.firma_id=? AND t.firma_id=? AND t.deleted_at IS NULL
+          AND s.odeme_turu='taksitli'
+          AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
+        GROUP BY DATE(t.vade_tarihi)
+    )
+    GROUP BY tarih
+", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis, $_SESSION['firma_id'], $_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
+foreach ($gunlukSatisCiro as $row) {
+    $tarih = $row['tarih'];
+    if (!isset($gunlukMap[$tarih])) continue;
     $gunlukMap[$tarih]['ciro'] += (float)$row['ciro'];
 }
 
@@ -130,7 +144,7 @@ foreach ($gunlukServis as $row) {
     $gunlukMap[$tarih]['ciro'] += (float)$row['ciro'];
 }
 
-$aySatisCiro = (float)($aySatis['ciro'] ?? 0);
+$aySatisCiro = $satis->getCiroByDateRange($ayBaslangic, $ayBitis);
 $ayServisCiro = (float)($ayServis['ciro'] ?? 0);
 $ayToplamCiro = $aySatisCiro + $ayServisCiro;
 $ayToplamMaliyet = $satisMaliyet + $servisMaliyet;

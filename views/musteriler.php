@@ -131,11 +131,11 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Ad <span class="text-red-500">*</span></label>
-                        <input type="text" class="form-input" x-model="form.ad" required>
+                        <input type="text" class="form-input" x-model="form.ad">
                     </div>
                     <div>
                         <label class="form-label">Soyad <span class="text-red-500">*</span></label>
-                        <input type="text" class="form-input" x-model="form.soyad" required>
+                        <input type="text" class="form-input" x-model="form.soyad">
                     </div>
                 </div>
                 <div>

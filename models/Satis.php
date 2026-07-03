@@ -67,6 +67,13 @@ class Satis extends Model {
 
     public function create(array $data): int {
         $tarih      = $data['satis_tarihi'] ?? date('Y-m-d');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$tarih)) {
+            $tarih = date('Y-m-d');
+        }
+        $ilkTaksitTarihi = !empty($data['ilk_taksit_tarihi']) ? (string)$data['ilk_taksit_tarihi'] : $tarih;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ilkTaksitTarihi)) {
+            $ilkTaksitTarihi = $tarih;
+        }
         $odemeTuru  = $data['odeme_turu']   ?? 'pesin';
         $taksitSay  = max(1, (int)($data['taksit_sayisi'] ?? 1));
         $pesinat    = (float)($data['pesinat'] ?? 0);
@@ -141,7 +148,7 @@ class Satis extends Model {
         if ($odemeTuru === 'taksitli') {
             require_once __DIR__ . '/Taksit.php';
             $taksitModel = new Taksit();
-            $taksitModel->olustur($id, $musteriId, $toplam, $pesinat, $taksitSay, $tarih);
+            $taksitModel->olustur($id, $musteriId, $toplam, $pesinat, $taksitSay, $ilkTaksitTarihi, $tarih);
         }
 
         // Cihazı müşteriye bağla
@@ -170,24 +177,84 @@ class Satis extends Model {
     }
 
     public function getBuAyToplam(): float {
-        return (float) $this->db->fetchColumn(
-            "SELECT COALESCE(SUM(toplam_tutar),0) FROM satislar
-             WHERE firma_id=? AND deleted_at IS NULL AND strftime('%Y-%m',satis_tarihi)=strftime('%Y-%m','now')",
-            [$this->firmaId]
-        );
+        return $this->getCiroByDateRange(date('Y-m-01'), date('Y-m-t'));
     }
 
     public function getAylikCiro(int $yil): array {
         $ciro = [];
         for ($ay = 1; $ay <= 12; $ay++) {
-            $total = $this->db->fetchColumn(
-                "SELECT COALESCE(SUM(toplam_tutar),0) FROM satislar
-                 WHERE firma_id=? AND deleted_at IS NULL AND strftime('%Y',satis_tarihi)=? AND strftime('%m',satis_tarihi)=?",
-                [$this->firmaId, (string)$yil, str_pad((string)$ay, 2, '0', STR_PAD_LEFT)]
-            );
-            $ciro[] = (float)$total;
+            $baslangic = sprintf('%04d-%02d-01', $yil, $ay);
+            $ciro[] = $this->getCiroByDateRange($baslangic, date('Y-m-t', strtotime($baslangic)));
         }
         return $ciro;
+    }
+
+    public function getCiroByDateRange(string $baslangic, string $bitis): float {
+        $pesinCiro = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(toplam_tutar),0)
+             FROM satislar
+             WHERE firma_id=? AND deleted_at IS NULL
+               AND odeme_turu <> 'taksitli'
+               AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $baslangic, $bitis]
+        );
+
+        $taksitCiro = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(t.tutar),0)
+             FROM taksitler t
+             JOIN satislar s ON s.id=t.satis_id AND s.deleted_at IS NULL
+             WHERE s.firma_id=? AND t.firma_id=? AND t.deleted_at IS NULL
+               AND s.odeme_turu='taksitli'
+               AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $this->firmaId, $baslangic, $bitis]
+        );
+
+        return $pesinCiro + $taksitCiro;
+    }
+
+    public function getMaliyetByDateRange(string $baslangic, string $bitis, float $usdKur = 0): float {
+        $pesinMaliyet = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(
+                sk.miktar
+                * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+             ),0)
+             FROM satis_kalemleri sk
+             JOIN satislar s ON s.id=sk.satis_id AND s.deleted_at IS NULL
+             LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+             WHERE s.firma_id=? AND sk.deleted_at IS NULL
+               AND s.odeme_turu <> 'taksitli'
+               AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$usdKur, $this->firmaId, $baslangic, $bitis]
+        );
+
+        $taksitliMaliyet = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(
+                CASE WHEN toplam_tutar > 0 THEN toplam_maliyet * (donem_taksit / toplam_tutar) ELSE 0 END
+             ),0)
+             FROM (
+                SELECT s.id, s.toplam_tutar,
+                       COALESCE(SUM(
+                           sk.miktar
+                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                       ),0) AS toplam_maliyet,
+                       (
+                           SELECT COALESCE(SUM(t.tutar),0)
+                           FROM taksitler t
+                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
+                             AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
+                       ) AS donem_taksit
+                FROM satislar s
+                LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
+                LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                WHERE s.firma_id=? AND s.deleted_at IS NULL AND s.odeme_turu='taksitli'
+                GROUP BY s.id
+             )",
+            [$usdKur, $baslangic, $bitis, $this->firmaId]
+        );
+
+        return $pesinMaliyet + $taksitliMaliyet;
     }
 
     private function ensureBakimTakibi(int $musteriId, string $satisTarihi): void {

@@ -231,8 +231,58 @@ include __DIR__ . '/layout/header.php';
                 <option value="2024">2024</option>
             </select>
         </div>
-        <div class="relative h-64">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+            <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
+                <p class="text-xs text-slate-500 font-semibold uppercase">Toplam Ciro</p>
+                <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(trendOzet.toplam_ciro)"></p>
+            </div>
+            <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                <p class="text-xs text-blue-500 font-semibold uppercase">Tahsilat</p>
+                <p class="text-lg font-bold text-blue-700 mt-1" x-text="formatCurrency(trendOzet.tahsilat)"></p>
+            </div>
+            <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
+                <p class="text-xs text-amber-600 font-semibold uppercase">Net Kâr</p>
+                <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(trendOzet.net_kar)"></p>
+            </div>
+            <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-3">
+                <p class="text-xs text-indigo-500 font-semibold uppercase">Satış</p>
+                <p class="text-2xl font-bold text-indigo-700 mt-1" x-text="trendOzet.satis_adet"></p>
+            </div>
+            <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
+                <p class="text-xs text-emerald-600 font-semibold uppercase">Servis</p>
+                <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="trendOzet.servis_adet"></p>
+            </div>
+        </div>
+        <div class="relative h-72">
             <canvas id="trendChart"></canvas>
+        </div>
+        <div class="overflow-x-auto mt-5">
+            <table class="data-table text-sm">
+                <thead>
+                    <tr>
+                        <th>Ay</th>
+                        <th>Satış</th>
+                        <th>Servis</th>
+                        <th>Ciro</th>
+                        <th>Tahsilat</th>
+                        <th>Maliyet</th>
+                        <th>Net Kâr</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in trendData" :key="row.ay">
+                        <tr>
+                            <td class="font-medium text-slate-700" x-text="row.label"></td>
+                            <td x-text="row.satis_adet"></td>
+                            <td x-text="row.servis_adet"></td>
+                            <td class="font-semibold" x-text="formatCurrency(row.toplam_ciro)"></td>
+                            <td class="text-blue-700 font-medium" x-text="formatCurrency(row.tahsilat)"></td>
+                            <td x-text="formatCurrency(row.toplam_maliyet)"></td>
+                            <td class="font-semibold" :class="row.net_kar >= 0 ? 'text-emerald-700' : 'text-red-600'" x-text="formatCurrency(row.net_kar)"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -243,6 +293,7 @@ function raporlarApp() {
         stats: {},
         doviz: { usd_try: 0 },
         karOzet: {},
+        trendData: [],
         trendYil: '<?= date('Y') ?>',
         trendChart: null,
         servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
@@ -250,7 +301,10 @@ function raporlarApp() {
         karFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
         finansFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
 
-        async init() { await Promise.all([this.loadStats(), this.loadDoviz()]); await this.loadKarOzet(); },
+        async init() {
+            await Promise.all([this.loadStats(), this.loadDoviz()]);
+            await Promise.all([this.loadKarOzet(), this.loadTrend()]);
+        },
 
         async loadDoviz() {
             try { this.doviz = await api('api/doviz.php'); } catch(e) { this.doviz = { usd_try: 0 }; }
@@ -277,24 +331,38 @@ function raporlarApp() {
                     buAyCiro: d.buAyCiro,
                     stokDegeri: d.stokDegeri,
                 };
-                this.$nextTick(() => this.renderTrend(d.aylikCiro || []));
             } catch(e) {}
         },
 
         async loadTrend() {
             try {
-                const d = await api(`api/dashboard.php?yil=${this.trendYil}`);
-                if (this.trendChart) {
-                    this.trendChart.data.datasets[0].data = d.aylikCiro || [];
-                    this.trendChart.update();
-                }
+                const p = new URLSearchParams({
+                    tip: 'aylik_trend',
+                    yil: this.trendYil,
+                    usd_try: this.doviz.usd_try || 0,
+                });
+                const d = await api(`api/raporlar.php?${p}`);
+                this.trendData = d.aylar || [];
+                this.$nextTick(() => this.renderTrend());
             } catch(e) {}
         },
 
-        renderTrend(data) {
+        get trendOzet() {
+            return this.trendData.reduce((acc, row) => {
+                acc.toplam_ciro += Number(row.toplam_ciro || 0);
+                acc.tahsilat += Number(row.tahsilat || 0);
+                acc.net_kar += Number(row.net_kar || 0);
+                acc.satis_adet += Number(row.satis_adet || 0);
+                acc.servis_adet += Number(row.servis_adet || 0);
+                return acc;
+            }, { toplam_ciro: 0, tahsilat: 0, net_kar: 0, satis_adet: 0, servis_adet: 0 });
+        },
+
+        renderTrend() {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
             if (this.trendChart) this.trendChart.destroy();
+            const data = this.trendData.map(row => row.toplam_ciro || 0);
             this.trendChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -319,6 +387,59 @@ function raporlarApp() {
                     }
                 }
             });
+            this.trendChart.data.labels = this.trendData.map(row => row.label);
+            this.trendChart.data.datasets = [
+                {
+                    type: 'bar',
+                    label: 'Ciro',
+                    data: this.trendData.map(row => row.toplam_ciro || 0),
+                    backgroundColor: '#2563eb',
+                    borderRadius: 6,
+                    maxBarThickness: 34,
+                },
+                {
+                    type: 'line',
+                    label: 'Tahsilat',
+                    data: this.trendData.map(row => row.tahsilat || 0),
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5,150,105,.12)',
+                    tension: 0.35,
+                    fill: false,
+                    pointRadius: 3,
+                },
+                {
+                    type: 'line',
+                    label: 'Net Kâr',
+                    data: this.trendData.map(row => row.net_kar || 0),
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245,158,11,.12)',
+                    tension: 0.35,
+                    fill: false,
+                    pointRadius: 3,
+                }
+            ];
+            this.trendChart.options.plugins.legend.display = true;
+            this.trendChart.options.interaction = { mode: 'index', intersect: false };
+            this.trendChart.options.plugins.tooltip = {
+                callbacks: {
+                    title: items => {
+                        const row = this.trendData[items[0].dataIndex] || {};
+                        return `${row.label} ${this.trendYil}`;
+                    },
+                    label: item => `${item.dataset.label}: ${formatCurrency(item.raw)}`,
+                    afterBody: items => {
+                        const row = this.trendData[items[0].dataIndex] || {};
+                        return [
+                            `Satış cirosu: ${formatCurrency(row.satis_ciro || 0)}`,
+                            `Servis cirosu: ${formatCurrency(row.servis_ciro || 0)}`,
+                            `Satış adedi: ${row.satis_adet || 0}`,
+                            `Servis adedi: ${row.servis_adet || 0}`,
+                        ];
+                    },
+                },
+            };
+            this.trendChart.options.scales.y.ticks.callback = value => Number(value || 0).toLocaleString('tr-TR') + ' ₺';
+            this.trendChart.update();
         },
 
         formatCurrency,

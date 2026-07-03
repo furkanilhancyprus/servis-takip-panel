@@ -56,6 +56,9 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Servis Takip Panel — Su Arıtma Servis Yönetim Sistemi</title>
     <meta name="description" content="Su arıtma firmanızı dijitalleştirin. Müşteri takibi, periyodik bakım yönetimi, stok ve tahsilat — tek platformda.">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="assets/img/favicon.png">
+    <link rel="apple-touch-icon" href="assets/img/favicon.png">
     <link rel="stylesheet" href="assets/css/tailwind.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -840,13 +843,13 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
         </div>
 
         <form id="chatStartForm" class="p-4 space-y-3 border-t border-slate-100">
-            <input id="chatName" required placeholder="Ad soyad"
+            <input id="chatName" placeholder="Ad soyad"
                    class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
             <input id="chatEmail" type="email" placeholder="E-posta (opsiyonel)"
                    class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
             <input id="chatPhone" placeholder="Telefon (opsiyonel)"
                    class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
-            <textarea id="chatFirstMessage" required rows="3" placeholder="Mesajınızı yazın"
+            <textarea id="chatFirstMessage" rows="3" placeholder="Mesajınızı yazın"
                       class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"></textarea>
             <button class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 font-semibold text-sm">
                 Destek Mesajı Gönder
@@ -854,7 +857,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
         </form>
 
         <form id="chatSendForm" class="hidden p-3 border-t border-slate-100 flex gap-2">
-            <input id="chatMessageInput" required placeholder="Mesaj yazın..."
+            <input id="chatMessageInput" placeholder="Mesaj yazın..."
                    class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
             <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 text-sm font-semibold">Gönder</button>
         </form>

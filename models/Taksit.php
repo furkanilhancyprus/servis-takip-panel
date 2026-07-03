@@ -4,7 +4,7 @@ require_once __DIR__ . '/Model.php';
 class Taksit extends Model {
 
     // Satış için taksit planı oluştur
-    public function olustur(int $satisId, int $musteriId, float $toplam, float $pesinat, int $taksitSayisi, string $ilkTarih): void {
+    public function olustur(int $satisId, int $musteriId, float $toplam, float $pesinat, int $taksitSayisi, string $ilkTarih, ?string $pesinatTarihi = null): void {
         // Önce eski taksitleri sil
         $this->db->query("UPDATE taksitler SET deleted_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE satis_id=? AND firma_id=?", [$satisId, $this->firmaId]);
 
@@ -28,10 +28,11 @@ class Taksit extends Model {
 
         // Peşinat varsa 0 numaralı taksit olarak kaydet (ödendi)
         if ($pesinat > 0) {
+            $pesinatTarihi = $pesinatTarihi ?: $ilkTarih;
             $this->db->execute("
                 INSERT INTO taksitler (firma_id, satis_id, musteri_id, taksit_no, tutar, vade_tarihi, odendi, odeme_tarihi)
                 VALUES (?,?,?,0,?,?,1,?)
-            ", [$this->firmaId, $satisId, $musteriId, $pesinat, $ilkTarih, $ilkTarih]);
+            ", [$this->firmaId, $satisId, $musteriId, $pesinat, $pesinatTarihi, $pesinatTarihi]);
         }
     }
 
