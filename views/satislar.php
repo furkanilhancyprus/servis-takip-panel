@@ -143,7 +143,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold text-slate-800">Yeni Satış</h3>
                 <button @click="showAdd=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveSatis()" class="modal-body space-y-4">
+            <form @submit.prevent="saveSatis()" class="modal-body space-y-4" novalidate>
 
                 <!-- Müşteri -->
                 <div>
@@ -490,7 +490,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold">Tahsilat Al</h3>
                 <button @click="showTahsilat=false"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveTahsilat()" class="modal-body space-y-4">
+            <form @submit.prevent="saveTahsilat()" class="modal-body space-y-4" novalidate>
                 <div class="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                     <p class="font-semibold" x-text="tahsilatForm.musteriAdi"></p>
                     <div class="flex justify-between mt-2 text-sm">
@@ -500,8 +500,8 @@ include __DIR__ . '/layout/header.php';
                 </div>
                 <div>
                     <label class="form-label">Tutar <span class="text-red-500">*</span></label>
-                    <input type="number" class="form-input" step="0.01" min="0.01"
-                           :max="tahsilatForm.kalan" x-model="tahsilatForm.tutar">
+                    <input type="number" class="form-input" step="0.01"
+                           x-model="tahsilatForm.tutar">
                     <button type="button" class="btn btn-sm btn-secondary mt-2 w-full"
                             @click="tahsilatForm.tutar = tahsilatForm.kalan">Tamamını Al</button>
                 </div>
@@ -535,7 +535,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold">Taksit Öde</h3>
                 <button @click="showTaksitOde=false"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveTaksitOde()" class="modal-body space-y-4">
+            <form @submit.prevent="saveTaksitOde()" class="modal-body space-y-4" novalidate>
                 <div class="bg-purple-50 rounded-xl p-4 border border-purple-100 text-sm">
                     <div class="flex justify-between">
                         <span x-text="taksitForm.taksit_no === 0 ? 'Peşinat' : `${taksitForm.taksit_no}. Taksit`" class="font-semibold"></span>

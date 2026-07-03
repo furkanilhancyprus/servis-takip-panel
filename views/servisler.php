@@ -142,7 +142,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold text-slate-800" x-text="editId ? 'Servis Kaydını Düzenle' : 'Yeni Servis Kaydı'"></h3>
                 <button @click="showAdd=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveServis()" class="modal-body space-y-4">
+            <form @submit.prevent="saveServis()" class="modal-body space-y-4" novalidate>
                 <!-- Müşteri seçimi -->
                 <div>
                     <label class="form-label">Müşteri <span class="text-red-500">*</span></label>
@@ -343,8 +343,7 @@ include __DIR__ . '/layout/header.php';
                     <div x-show="form.tahsilat_al" x-transition class="grid grid-cols-3 gap-4 mt-4">
                         <div>
                             <label class="form-label">Tahsilat Tutarı</label>
-                            <input type="number" class="form-input" step="0.01" min="0.01"
-                                   :max="form.toplam_tutar"
+                            <input type="number" class="form-input" step="0.01"
                                    x-model="form.tahsilat_tutar">
                         </div>
                         <div>
@@ -481,7 +480,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold text-slate-800">Tahsilat Al</h3>
                 <button @click="showTahsilat=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveTahsilat()" class="modal-body space-y-4">
+            <form @submit.prevent="saveTahsilat()" class="modal-body space-y-4" novalidate>
                 <div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
                     <p class="text-xs text-slate-500 mb-1">Müşteri / Servis</p>
                     <p class="font-semibold text-slate-800" x-text="tahsilatForm.musteriAdi"></p>
@@ -493,8 +492,7 @@ include __DIR__ . '/layout/header.php';
 
                 <div>
                     <label class="form-label">Tahsilat Tutarı <span class="text-red-500">*</span></label>
-                    <input type="number" class="form-input" step="0.01" min="0.01"
-                           :max="tahsilatForm.kalan"
+                    <input type="number" class="form-input" step="0.01"
                            x-model="tahsilatForm.tutar">
                     <div class="flex gap-2 mt-2">
                         <button type="button" class="btn btn-sm btn-secondary flex-1"

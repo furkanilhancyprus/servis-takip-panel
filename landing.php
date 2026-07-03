@@ -842,7 +842,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
             </div>
         </div>
 
-        <form id="chatStartForm" class="p-4 space-y-3 border-t border-slate-100">
+        <form id="chatStartForm" class="p-4 space-y-3 border-t border-slate-100" novalidate>
             <input id="chatName" placeholder="Ad soyad"
                    class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
             <input id="chatEmail" type="email" placeholder="E-posta (opsiyonel)"
@@ -856,7 +856,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
             </button>
         </form>
 
-        <form id="chatSendForm" class="hidden p-3 border-t border-slate-100 flex gap-2">
+        <form id="chatSendForm" class="hidden p-3 border-t border-slate-100 flex gap-2" novalidate>
             <input id="chatMessageInput" placeholder="Mesaj yazın..."
                    class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500">
             <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 text-sm font-semibold">Gönder</button>

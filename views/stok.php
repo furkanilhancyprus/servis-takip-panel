@@ -160,7 +160,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold text-slate-800" x-text="editId ? 'Parça / Cihaz Düzenle' : 'Yeni Parça / Cihaz Ekle'"></h3>
                 <button @click="showForm=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveParca()" class="modal-body space-y-4">
+            <form @submit.prevent="saveParca()" class="modal-body space-y-4" novalidate>
 
                 <!-- Cihaz toggle -->
                 <div class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer"

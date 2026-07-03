@@ -127,7 +127,7 @@ include __DIR__ . '/layout/header.php';
                 <h3 class="font-semibold text-slate-800" x-text="editId ? 'Müşteri Düzenle' : 'Yeni Müşteri'"></h3>
                 <button @click="closeForm()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveMusteri()" class="modal-body space-y-4">
+            <form @submit.prevent="saveMusteri()" class="modal-body space-y-4" novalidate>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Ad <span class="text-red-500">*</span></label>

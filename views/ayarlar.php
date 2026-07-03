@@ -241,7 +241,7 @@ require_once ROOT . '/views/layout/header.php';
                 <h3 class="font-semibold text-slate-800" x-text="cihazEditId ? 'Cihaz Düzenle' : 'Yeni Cihaz Ekle'"></h3>
                 <button @click="showCihazModal=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveCihaz()" class="modal-body space-y-4">
+            <form @submit.prevent="saveCihaz()" class="modal-body space-y-4" novalidate>
                 <div><label class="form-label">Cihaz Adı <span class="text-red-500">*</span></label><input type="text" class="form-input" x-model="cihazForm.cihaz_adi"></div>
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="form-label">Marka</label><input type="text" class="form-input" x-model="cihazForm.marka"></div>
@@ -267,7 +267,7 @@ require_once ROOT . '/views/layout/header.php';
                 <h3 class="font-semibold text-slate-800" x-text="islemEditId ? 'İşlem Düzenle' : 'Yeni İşlem Ekle'"></h3>
                 <button @click="showIslemModal=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
             </div>
-            <form @submit.prevent="saveIslem()" class="modal-body space-y-4">
+            <form @submit.prevent="saveIslem()" class="modal-body space-y-4" novalidate>
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
                         <label class="form-label">İşlem Adı <span class="text-red-500">*</span></label>
