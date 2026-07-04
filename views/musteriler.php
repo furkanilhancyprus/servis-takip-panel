@@ -131,11 +131,26 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Ad <span class="text-red-500">*</span></label>
-                        <input type="text" class="form-input" x-model="form.ad">
+                        <input type="text" class="form-input" x-model="form.ad" @input.debounce.400ms="checkSimilarCustomers()">
                     </div>
                     <div>
                         <label class="form-label">Soyad <span class="text-red-500">*</span></label>
-                        <input type="text" class="form-input" x-model="form.soyad">
+                        <input type="text" class="form-input" x-model="form.soyad" @input.debounce.400ms="checkSimilarCustomers()">
+                    </div>
+                </div>
+                <div x-show="!editId && similarCustomers.length > 0" x-transition
+                     class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <p class="font-semibold flex items-center gap-2">
+                        <i class="fas fa-triangle-exclamation text-amber-500"></i>
+                        Benzer müşteri kaydı olabilir
+                    </p>
+                    <div class="mt-2 space-y-1">
+                        <template x-for="m in similarCustomers" :key="m.id">
+                            <div class="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-2 py-1.5">
+                                <span class="font-medium" x-text="m.ad + ' ' + m.soyad"></span>
+                                <span class="text-xs text-amber-700" x-text="m.telefon || 'Telefon yok'"></span>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <div>
@@ -318,9 +333,19 @@ include __DIR__ . '/layout/header.php';
                 <!-- Periyodik Bakım -->
                 <div>
                     <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Periyodik Bakım</h4>
-                    <div class="bg-slate-50 rounded-xl p-4">
+                    <div class="bg-slate-50 rounded-xl p-4 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p class="font-semibold text-slate-800 text-sm">Planlanan bakım takvimi</p>
+                                <p class="text-xs text-slate-400 mt-0.5" x-text="bakimDurumuText()"></p>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-secondary" @click="toggleBakimEdit()">
+                                <i class="fas fa-calendar-days text-xs"></i>
+                                <span x-text="showBakimEdit ? 'Vazgeç' : 'Ayarla'"></span>
+                            </button>
+                        </div>
                         <template x-if="detail?.bakim_aktif">
-                            <div class="grid grid-cols-3 gap-3 text-sm">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                 <div>
                                     <p class="text-xs text-slate-400">Periyot</p>
                                     <p class="font-medium text-slate-700" x-text="(detail.periyot_ay||6)+' Ay'"></p>
@@ -338,6 +363,45 @@ include __DIR__ . '/layout/header.php';
                         <template x-if="!detail?.bakim_aktif">
                             <p class="text-sm text-slate-400">Periyodik bakım ayarlanmamış.</p>
                         </template>
+                        <div x-show="showBakimEdit" x-transition class="border border-slate-200 rounded-xl bg-white p-4 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="form-label">Periyot (Ay)</label>
+                                    <input type="number" class="form-input" min="1" max="60" x-model="bakimForm.periyot_ay">
+                                </div>
+                                <div>
+                                    <label class="form-label">Son Bakım</label>
+                                    <input type="date" class="form-input" x-model="bakimForm.son_bakim_tarihi">
+                                </div>
+                                <div>
+                                    <label class="form-label">Sonraki Bakım</label>
+                                    <input type="date" class="form-input" x-model="bakimForm.sonraki_bakim_tarihi">
+                                </div>
+                                <div>
+                                    <label class="form-label">Hatırlatma (Gün)</label>
+                                    <input type="number" class="form-input" min="1" max="90" x-model="bakimForm.hatirlatma_gun">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Not</label>
+                                    <input type="text" class="form-input" x-model="bakimForm.notlar" placeholder="Örn: 3 ay yurtdışında, Ekimde aranacak">
+                                </div>
+                            </div>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                                <input type="checkbox" class="rounded" x-model="bakimForm.aktif">
+                                Periyodik bakım takibi aktif
+                            </label>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(1)">+1 Ay Ertele</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(3)">+3 Ay Ertele</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(6)">+6 Ay Ertele</button>
+                                </div>
+                                <button type="button" class="btn btn-primary" @click="saveBakimPlan()" :disabled="saving">
+                                    <span x-show="saving" class="spinner w-4 h-4"></span>
+                                    Kaydet
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -543,8 +607,10 @@ function emptyCustomerForm() {
 function musterilerApp() {
     return {
         musteriler: [], cihazlar: [], stats: {}, loading: false, search: '',
+        similarCustomers: [],
         showForm: false, showDetail: false, editId: null, saving: false,
-        detail: null, showDetailMap: false,
+        detail: null, showDetailMap: false, showBakimEdit: false,
+        bakimForm: { aktif: true, periyot_ay: 6, son_bakim_tarihi: '', sonraki_bakim_tarihi: '', hatirlatma_gun: 7, notlar: '' },
         // Map state
         showMap: false, mapSearch: '', geocoding: false, locating: false,
         _formMap: null, _formMarker: null,
@@ -590,10 +656,32 @@ function musterilerApp() {
             this.form.mevcut_cihaz.model = c ? (c.model || '') : '';
         },
 
+        normalizeText(value) {
+            return String(value || '')
+                .trim()
+                .toLocaleLowerCase('tr-TR')
+                .replace(/\s+/g, ' ');
+        },
+
+        async checkSimilarCustomers() {
+            if (this.editId) { this.similarCustomers = []; return; }
+            const ad = this.normalizeText(this.form.ad);
+            const soyad = this.normalizeText(this.form.soyad);
+            if ((ad + soyad).length < 3) { this.similarCustomers = []; return; }
+            const query = [ad, soyad].filter(Boolean).join(' ');
+            try {
+                const rows = await api(`api/musteriler.php?search=${encodeURIComponent(query)}`);
+                this.similarCustomers = (rows || []).slice(0, 4);
+            } catch(e) {
+                this.similarCustomers = [];
+            }
+        },
+
         openAddModal() {
             this.editId = null;
             this.showMap = false;
             this.mapSearch = '';
+            this.similarCustomers = [];
             this.form = emptyCustomerForm();
             this.showForm = true;
         },
@@ -602,6 +690,7 @@ function musterilerApp() {
             this.editId = m.id;
             this.showMap = false;
             this.mapSearch = '';
+            this.similarCustomers = [];
             this.form = {
                 ad: m.ad, soyad: m.soyad, telefon: m.telefon||'',
                 adres: m.adres||'', notlar: m.notlar||'',
@@ -618,17 +707,63 @@ function musterilerApp() {
         async viewMusteri(m) {
             this.detail = null;
             this.showDetailMap = false;
+            this.showBakimEdit = false;
             this.showDetail = true;
             try {
                 this.detail = await api(`api/musteriler.php?id=${m.id}`);
+                this.fillBakimForm();
             } catch(e) { this.showDetail = false; }
         },
 
         closeDetail() {
             this.showDetail = false;
+            this.showBakimEdit = false;
         },
 
         // ── Harita (Form) ──────────────────────────────────────────
+        fillBakimForm() {
+            this.bakimForm = {
+                aktif: Number(this.detail?.bakim_aktif ?? 1) === 1,
+                periyot_ay: parseInt(this.detail?.periyot_ay) || 6,
+                son_bakim_tarihi: this.detail?.son_bakim_tarihi ? String(this.detail.son_bakim_tarihi).slice(0, 10) : '',
+                sonraki_bakim_tarihi: this.detail?.sonraki_bakim_tarihi ? String(this.detail.sonraki_bakim_tarihi).slice(0, 10) : '',
+                hatirlatma_gun: parseInt(this.detail?.hatirlatma_gun) || 7,
+                notlar: this.detail?.bakim_notlari || '',
+            };
+        },
+
+        toggleBakimEdit() {
+            if (!this.showBakimEdit) this.fillBakimForm();
+            this.showBakimEdit = !this.showBakimEdit;
+        },
+
+        bakimDurumuText() {
+            if (!this.detail?.bakim_aktif) return 'Bu müşteri için bakım takibi kapalı.';
+            if (!this.detail?.sonraki_bakim_tarihi) return 'Henüz planlanmış bakım tarihi yok.';
+            return 'Sonraki bakım: ' + formatDate(this.detail.sonraki_bakim_tarihi);
+        },
+
+        erteleBakimAy(ay) {
+            const base = this.bakimForm.sonraki_bakim_tarihi || new Date().toISOString().slice(0, 10);
+            const d = new Date(base + 'T12:00:00');
+            d.setMonth(d.getMonth() + ay);
+            this.bakimForm.sonraki_bakim_tarihi = d.toISOString().slice(0, 10);
+            this.bakimForm.aktif = true;
+        },
+
+        async saveBakimPlan() {
+            if (!this.detail?.id) return;
+            this.saving = true;
+            try {
+                await api(`api/bakimlar.php?musteri_id=${this.detail.id}`, { method: 'PUT', body: this.bakimForm });
+                showToast('Bakım takvimi güncellendi.', 'success');
+                this.detail = await api(`api/musteriler.php?id=${this.detail.id}`);
+                this.fillBakimForm();
+                this.showBakimEdit = false;
+                await Promise.all([this.loadMusteriler(), this.loadStats()]);
+            } catch(e) {} finally { this.saving = false; }
+        },
+
         toggleMap() {
             this.showMap = !this.showMap;
             if (this.showMap) {

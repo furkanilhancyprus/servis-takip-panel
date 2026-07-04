@@ -51,7 +51,7 @@ include __DIR__ . '/layout/header.php';
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>#</th>
+                        <th>Sıra</th>
                         <th>Müşteri</th>
                         <th>Cihaz</th>
                         <th>Tarih</th>
@@ -73,58 +73,65 @@ include __DIR__ . '/layout/header.php';
                             <i class="fas fa-cart-shopping text-3xl mb-2 block text-slate-200"></i>Satış yok
                         </td></tr>
                     </template>
-                    <template x-for="s in satislar" :key="s.id">
-                        <tr>
-                            <td class="text-slate-400 text-xs" x-text="`#${s.id}`"></td>
-                            <td>
-                                <p class="font-medium text-slate-800" x-text="s.musteri_adi"></p>
-                                <p class="text-xs text-slate-400" x-text="s.telefon || ''"></p>
+                    <template x-for="row in satisRows" :key="row.key">
+                        <tr :class="row.type === 'month' ? 'bg-slate-50/80' : ''">
+                            <td x-show="row.type === 'month'" colspan="9" class="py-3">
+                                <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <span x-text="row.label"></span>
+                                    <span class="h-px flex-1 bg-slate-200"></span>
+                                    <span x-text="`${row.count} satış`"></span>
+                                </div>
                             </td>
-                            <td>
-                                <template x-if="s.cihaz_adi">
+                            <td x-show="row.type === 'sale'" class="text-slate-500 text-sm font-semibold" x-text="row.no"></td>
+                            <td x-show="row.type === 'sale'">
+                                <p class="font-medium text-slate-800" x-text="row.item?.musteri_adi"></p>
+                                <p class="text-xs text-slate-400" x-text="row.item?.telefon || ''"></p>
+                            </td>
+                            <td x-show="row.type === 'sale'">
+                                <template x-if="row.item?.cihaz_adi">
                                     <div>
-                                        <p class="text-sm font-medium text-slate-700" x-text="s.cihaz_adi"></p>
-                                        <p class="text-xs text-slate-400" x-text="s.cihaz_marka || ''"></p>
+                                        <p class="text-sm font-medium text-slate-700" x-text="row.item.cihaz_adi"></p>
+                                        <p class="text-xs text-slate-400" x-text="row.item.cihaz_marka || ''"></p>
                                     </div>
                                 </template>
-                                <template x-if="!s.cihaz_adi">
+                                <template x-if="!row.item?.cihaz_adi">
                                     <span class="text-slate-300 text-xs">—</span>
                                 </template>
                             </td>
-                            <td class="text-sm text-slate-600" x-text="formatDate(s.satis_tarihi)"></td>
-                            <td>
+                            <td x-show="row.type === 'sale'" class="text-sm text-slate-600" x-text="formatDate(row.item?.satis_tarihi)"></td>
+                            <td x-show="row.type === 'sale'">
                                 <span class="badge"
-                                      :class="s.odeme_turu === 'taksitli' ? 'badge-purple' : 'badge-blue'"
-                                      x-text="s.odeme_turu === 'taksitli' ? `${s.taksit_sayisi} Taksit` : 'Peşin'">
+                                      :class="row.item?.odeme_turu === 'taksitli' ? 'badge-purple' : 'badge-blue'"
+                                      x-text="row.item?.odeme_turu === 'taksitli' ? `${row.item?.taksit_sayisi} Taksit` : 'Peşin'">
                                 </span>
                             </td>
-                            <td class="font-semibold text-slate-700" x-text="formatCurrency(s.toplam_tutar)"></td>
-                            <td>
-                                <span class="badge" :class="odemeBadgeClass(s.odeme_durumu)"
-                                      x-text="odemeBadgeText(s.odeme_durumu)"></span>
-                                <p x-show="s.bekleyen_taksit > 0"
-                                   class="text-xs text-orange-500 mt-0.5" x-text="`${s.bekleyen_taksit} taksit bekliyor`"></p>
+                            <td x-show="row.type === 'sale'" class="font-semibold text-slate-700" x-text="formatCurrency(row.item?.toplam_tutar)"></td>
+                            <td x-show="row.type === 'sale'">
+                                <span class="badge" :class="odemeBadgeClass(row.item?.odeme_durumu)"
+                                      x-text="odemeBadgeText(row.item?.odeme_durumu)"></span>
+                                <p x-show="row.item?.bekleyen_taksit > 0"
+                                   class="text-xs text-orange-500 mt-0.5" x-text="`${row.item?.bekleyen_taksit} taksit bekliyor`"></p>
                             </td>
-                            <td>
+                            <td x-show="row.type === 'sale'">
                                 <span class="text-sm font-medium"
-                                      :class="(s.toplam_tutar - s.odenen_tutar) > 0 ? 'text-red-600' : 'text-emerald-600'"
-                                      x-text="formatCurrency(Math.max(0,(+s.toplam_tutar||0)-(+s.odenen_tutar||0)))">
+                                      :class="(row.item?.toplam_tutar - row.item?.odenen_tutar) > 0 ? 'text-red-600' : 'text-emerald-600'"
+                                      x-text="formatCurrency(Math.max(0,(+row.item?.toplam_tutar||0)-(+row.item?.odenen_tutar||0)))">
                                 </span>
                             </td>
-                            <td>
+                            <td x-show="row.type === 'sale'">
                                 <div class="flex items-center justify-end gap-1">
-                                    <button class="btn btn-sm btn-secondary btn-icon" @click="viewSatis(s)" title="Detay">
+                                    <button class="btn btn-sm btn-secondary btn-icon" @click="viewSatis(row.item)" title="Detay">
                                         <i class="fas fa-eye text-slate-500"></i>
                                     </button>
-                                    <a :href="`fiyat_teklifi.php?tip=satis&id=${s.id}`" target="_blank"
+                                    <a :href="`fiyat_teklifi.php?tip=satis&id=${row.item?.id}`" target="_blank"
                                        class="btn btn-sm btn-secondary btn-icon" title="Fatura / Teklif">
                                         <i class="fas fa-file-invoice text-indigo-500"></i>
                                     </a>
-                                    <button x-show="s.odeme_durumu !== 'odendi'"
-                                            class="btn btn-sm btn-success btn-icon" @click="openTahsilat(s)" title="Tahsilat Al">
+                                    <button x-show="row.item?.odeme_durumu !== 'odendi'"
+                                            class="btn btn-sm btn-success btn-icon" @click="openTahsilat(row.item)" title="Tahsilat Al">
                                         <i class="fas fa-money-bill-wave text-emerald-600"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-danger btn-icon" @click="deleteSatis(s)" title="Sil">
+                                    <button class="btn btn-sm btn-danger btn-icon" @click="deleteSatis(row.item)" title="Sil">
                                         <i class="fas fa-trash text-red-500"></i>
                                     </button>
                                 </div>
@@ -194,6 +201,22 @@ include __DIR__ . '/layout/header.php';
                 <div x-show="form.cihaz_id">
                     <label class="form-label">Seri No / Barkod (Opsiyonel)</label>
                     <input type="text" class="form-input" x-model="form.seri_no" placeholder="Cihaz seri numarası">
+                </div>
+
+                <div x-show="form.cihaz_id" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="form-label">Cihaz Satış Fiyatı (₺)</label>
+                        <input type="number" class="form-input" step="0.01" min="0"
+                               x-model="form.cihaz_satis_fiyati" @input="calcCihazNetTutar()">
+                    </div>
+                    <div>
+                        <label class="form-label">İndirim Tutarı (₺)</label>
+                        <input type="number" class="form-input" step="0.01" min="0"
+                               x-model="form.indirim_tutari" @input="calcCihazNetTutar()">
+                    </div>
+                    <p class="md:col-span-2 text-xs text-slate-400">
+                        Net satış tutarı: <span class="font-semibold text-slate-600" x-text="formatCurrency(+form.toplam_tutar||0)"></span>
+                    </p>
                 </div>
 
                 <!-- Kalemler -->
@@ -308,6 +331,10 @@ include __DIR__ . '/layout/header.php';
                             <button type="button" class="btn btn-sm btn-secondary"
                                     @click="setIlkTaksitSonrakiAy()">
                                 1 ay sonra
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary"
+                                    @click="setIlkTaksitAyBasi()">
+                                Ay Başı
                             </button>
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
@@ -584,6 +611,7 @@ function satislarApp() {
         form: {
             musteri_id: '', satis_tarihi: new Date().toISOString().split('T')[0],
             cihaz_id: '', seri_no: '',
+            cihaz_satis_fiyati: 0, indirim_tutari: 0,
             kalemler: [], notlar: '', toplam_tutar: 0,
             odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0, ilk_taksit_tarihi: '',
         },
@@ -599,6 +627,54 @@ function satislarApp() {
 
         async init() {
             await Promise.all([this.loadSatislar(), this.loadStoklar(), this.loadCihazlar()]);
+        },
+
+        get satisRows() {
+            const sorted = [...this.satislar].sort((a, b) => {
+                const dateA = this.saleDateKey(a);
+                const dateB = this.saleDateKey(b);
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return (Number(a.id) || 0) - (Number(b.id) || 0);
+            });
+            const monthCounts = sorted.reduce((acc, sale) => {
+                const month = this.saleMonthKey(sale);
+                acc[month] = (acc[month] || 0) + 1;
+                return acc;
+            }, {});
+            const rows = [];
+            let activeMonth = '';
+            let monthNo = 0;
+            sorted.forEach((sale) => {
+                const month = this.saleMonthKey(sale);
+                if (month !== activeMonth) {
+                    activeMonth = month;
+                    monthNo = 0;
+                    rows.push({
+                        type: 'month',
+                        key: `month-${month}`,
+                        label: this.monthLabel(month),
+                        count: monthCounts[month] || 0,
+                    });
+                }
+                monthNo++;
+                rows.push({ type: 'sale', key: `sale-${sale.id}`, no: monthNo, item: sale });
+            });
+            return rows;
+        },
+
+        saleDateKey(sale) {
+            return String(sale?.satis_tarihi || sale?.created_at || '9999-12-31').slice(0, 10);
+        },
+
+        saleMonthKey(sale) {
+            return this.saleDateKey(sale).slice(0, 7) || 'tarihsiz';
+        },
+
+        monthLabel(monthKey) {
+            if (monthKey === 'tarihsiz') return 'Tarihsiz satışlar';
+            const [year, month] = monthKey.split('-').map(Number);
+            const names = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+            return `${names[(month || 1) - 1]} ${year}`;
         },
 
         async loadSatislar() {
@@ -633,6 +709,7 @@ function satislarApp() {
             this.form = {
                 musteri_id: '', satis_tarihi: new Date().toISOString().split('T')[0],
                 cihaz_id: '', seri_no: '',
+                cihaz_satis_fiyati: 0, indirim_tutari: 0,
                 kalemler: [], notlar: '', toplam_tutar: 0,
                 odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0, ilk_taksit_tarihi: '',
             };
@@ -643,10 +720,18 @@ function satislarApp() {
 
         setCihazFiyat() {
             const c = this.cihazlar.find(x => x.id == this.form.cihaz_id);
-            if (c && c.varsayilan_fiyat > 0 && !this.form.toplam_tutar) {
-                this.form.toplam_tutar = c.varsayilan_fiyat;
-                this.calcTaksit();
-            }
+            this.form.cihaz_satis_fiyati = c ? +(parseFloat(c.varsayilan_fiyat) || 0).toFixed(2) : 0;
+            this.form.indirim_tutari = 0;
+            this.calcCihazNetTutar();
+        },
+
+        calcCihazNetTutar() {
+            if (!this.form.cihaz_id) return;
+            const fiyat = parseFloat(this.form.cihaz_satis_fiyati) || 0;
+            const indirim = Math.min(Math.max(parseFloat(this.form.indirim_tutari) || 0, 0), fiyat);
+            this.form.indirim_tutari = +indirim.toFixed(2);
+            this.form.toplam_tutar = +(fiyat - indirim).toFixed(2);
+            this.calcTaksit();
         },
 
         addStokKalem()  { this.form.kalemler.push({ parca_id: '', urun_adi: '', miktar: 1, birim_fiyat: 0, stok_mod: true  }); },
@@ -685,8 +770,16 @@ function satislarApp() {
             this.form.ilk_taksit_tarihi = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
         },
 
+        setIlkTaksitAyBasi() {
+            const base = this.form.satis_tarihi || this.todayDate();
+            const [year, month] = base.split('-').map(Number);
+            const next = new Date(year, month, 1);
+            this.form.ilk_taksit_tarihi = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
+        },
+
         async saveSatis() {
             if (!this.form.musteri_id) { showToast('Lütfen müşteri seçin.', 'error'); return; }
+            if (this.form.cihaz_id) this.calcCihazNetTutar();
             if (!this.form.toplam_tutar && !this.form.kalemler.length) {
                 showToast('Tutar veya kalem girin.', 'error'); return;
             }

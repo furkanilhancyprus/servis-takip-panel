@@ -14,6 +14,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Toplam Müşteri</p>
                     <p class="text-3xl font-bold text-slate-800 mt-1" x-text="stats.toplamMusteri ?? '—'"></p>
+                    <a href="?page=musteriler" class="text-xs text-blue-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-users text-blue-600"></i>
@@ -26,6 +27,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Servis</p>
                     <p class="text-3xl font-bold text-emerald-600 mt-1" x-text="stats.buAyYapilan ?? '—'"></p>
+                    <a href="?page=servisler" class="text-xs text-emerald-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-check-circle text-emerald-500"></i>
@@ -39,6 +41,7 @@ include __DIR__ . '/layout/header.php';
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Ciro</p>
                     <p class="text-xl font-bold text-purple-600 mt-1" x-text="formatCurrency(stats.buAyCiro)"></p>
                     <p class="text-xs text-slate-400 mt-0.5">Servis + Satış</p>
+                    <a href="?page=raporlar" class="text-xs text-purple-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-turkish-lira-sign text-purple-500"></i>
@@ -51,6 +54,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Kritik Stok</p>
                     <p class="text-3xl font-bold text-orange-600 mt-1" x-text="stats.kritikStok ?? '—'"></p>
+                    <a href="?page=stok" class="text-xs text-orange-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-triangle-exclamation text-orange-500"></i>
@@ -73,7 +77,7 @@ include __DIR__ . '/layout/header.php';
                     <i class="fas fa-calendar-check text-cyan-500"></i>
                 </div>
             </div>
-            <a href="?page=bakimlar" class="text-xs text-cyan-600 hover:underline mt-2 inline-block">Listeye git →</a>
+            <a href="?page=bakimlar" class="text-xs text-cyan-600 hover:underline mt-2 inline-block">İncele →</a>
         </div>
 
         <div class="stat-card border-l-4 border-l-blue-400">
@@ -81,6 +85,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Tahsilat</p>
                     <p class="text-xl font-bold text-blue-600 mt-1" x-text="formatCurrency(stats.buAyTahsilat)"></p>
+                    <a href="?page=tahsilatlar" class="text-xs text-blue-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-money-bill-wave text-blue-500"></i>
@@ -98,7 +103,7 @@ include __DIR__ . '/layout/header.php';
                     <i class="fas fa-clock-rotate-left text-red-500"></i>
                 </div>
             </div>
-            <a href="?page=tahsilatlar" class="text-xs text-red-500 hover:underline mt-2 inline-block">Takip et →</a>
+            <a href="?page=tahsilatlar" class="text-xs text-red-500 hover:underline mt-2 inline-block">İncele →</a>
         </div>
 
         <div class="stat-card border-l-4 border-l-amber-400">
@@ -106,6 +111,7 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Geciken Bakım</p>
                     <p class="text-3xl font-bold text-red-600 mt-1" x-text="stats.gecikenBakim ?? '—'"></p>
+                    <a href="?page=bakimlar" class="text-xs text-red-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
                     <i class="fas fa-exclamation-circle text-red-500"></i>
@@ -234,8 +240,11 @@ include __DIR__ . '/layout/header.php';
                     <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
                 </div>
             </div>
-            <div class="relative h-64">
-                <canvas id="dailyCiroChart"></canvas>
+            <div class="relative h-72 min-h-72">
+                <canvas id="dailyCiroChart" class="block w-full h-full"></canvas>
+                <div x-show="chartError"
+                     class="absolute inset-0 flex items-center justify-center text-sm text-red-500 bg-white/80 pointer-events-none"
+                     x-text="chartError"></div>
                 <div x-show="gunlukAyCiro.length === 0 || maxGunlukCiro === 0"
                      class="absolute inset-0 flex items-center justify-center text-sm text-slate-400 pointer-events-none">
                     Bu ay için ciro kaydı yok
@@ -285,6 +294,7 @@ function dashboardApp() {
         ayOzeti: {},
         gunlukAyCiro: [],
         dailyChart: null,
+        chartError: '',
 
         async init() {
             await this.loadDashboard();
@@ -321,6 +331,11 @@ function dashboardApp() {
         renderDailyCiroChart() {
             const ctx = document.getElementById('dailyCiroChart');
             if (!ctx) return;
+            this.chartError = '';
+            if (typeof Chart === 'undefined') {
+                this.chartError = 'Grafik kütüphanesi yüklenemedi.';
+                return;
+            }
             if (this.dailyChart) this.dailyChart.destroy();
 
             this.dailyChart = new Chart(ctx, {
@@ -376,6 +391,7 @@ function dashboardApp() {
                     },
                 },
             });
+            setTimeout(() => this.dailyChart && this.dailyChart.resize(), 0);
         },
 
         odemeBadgeClass(d) {

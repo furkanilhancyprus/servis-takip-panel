@@ -106,7 +106,7 @@ include __DIR__ . '/layout/header.php';
                             <td class="text-slate-500" x-text="p.marka || '—'"></td>
                             <td class="text-center">
                                 <span class="text-lg font-bold"
-                                      :class="p.stok_miktari <= p.kritik_stok_seviyesi ? 'text-red-600' : 'text-slate-800'"
+                                      :class="isKritik(p) ? 'text-red-600' : 'text-slate-800'"
                                       x-text="p.stok_miktari"></span>
                             </td>
                             <td class="text-center text-slate-400" x-text="p.kritik_stok_seviyesi"></td>
@@ -127,8 +127,8 @@ include __DIR__ . '/layout/header.php';
                             </td>
                             <td>
                                 <span class="badge"
-                                      :class="p.stok_miktari <= p.kritik_stok_seviyesi ? 'badge-red' : 'badge-green'"
-                                      x-text="p.stok_miktari <= p.kritik_stok_seviyesi ? 'Kritik' : 'Normal'"></span>
+                                      :class="isKritik(p) ? 'badge-red' : 'badge-green'"
+                                      x-text="isKritik(p) ? 'Kritik' : 'Normal'"></span>
                             </td>
                             <td>
                                 <div class="flex items-center justify-end gap-1">
@@ -278,13 +278,13 @@ function stokApp() {
             return this.parcalar.filter(p => {
                 const q = this.search.toLowerCase();
                 const match = !q || p.parca_adi.toLowerCase().includes(q) || (p.marka || '').toLowerCase().includes(q);
-                const kritik = !this.sadecekritik || p.stok_miktari <= p.kritik_stok_seviyesi;
+                const kritik = !this.sadecekritik || this.isKritik(p);
                 const cihaz = !this.sadececihaz || p.is_cihaz == 1;
                 return match && kritik && cihaz;
             });
         },
 
-        get kritikCount() { return this.parcalar.filter(p => p.stok_miktari <= p.kritik_stok_seviyesi).length; },
+        get kritikCount() { return this.parcalar.filter(p => this.isKritik(p)).length; },
         get stokDegeri() { return this.parcalar.reduce((s, p) => s + (p.stok_miktari * (p.birim_fiyat || 0)), 0); },
 
         async init() { await Promise.all([this.loadParcalar(), this.loadDoviz()]); },
@@ -296,6 +296,10 @@ function stokApp() {
         async loadParcalar() {
             this.loading = true;
             try { this.parcalar = await api('api/stok.php'); } catch(e) {} finally { this.loading = false; }
+        },
+
+        isKritik(p) {
+            return (Number(p.stok_miktari) || 0) <= (Number(p.kritik_stok_seviyesi) || 0);
         },
 
         openAddModal() {

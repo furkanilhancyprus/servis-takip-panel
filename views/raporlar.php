@@ -222,8 +222,8 @@ include __DIR__ . '/layout/header.php';
     </div>
 
     <!-- Servis Trend Grafiği -->
-    <div class="card p-6">
-        <div class="flex items-center justify-between mb-5">
+    <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold text-slate-800">Aylık Servis & Ciro Trendi</h3>
             <select class="form-select w-24 text-xs py-1.5" x-model="trendYil" @change="loadTrend()">
                 <option value="2026">2026</option>
@@ -231,7 +231,7 @@ include __DIR__ . '/layout/header.php';
                 <option value="2024">2024</option>
             </select>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
                 <p class="text-xs text-slate-500 font-semibold uppercase">Toplam Ciro</p>
                 <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(trendOzet.toplam_ciro)"></p>
@@ -253,10 +253,13 @@ include __DIR__ . '/layout/header.php';
                 <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="trendOzet.servis_adet"></p>
             </div>
         </div>
-        <div class="relative h-72">
-            <canvas id="trendChart"></canvas>
+        <div class="relative h-64 min-h-64">
+            <canvas id="trendChart" class="block w-full h-full"></canvas>
+            <div x-show="trendChartError"
+                 class="absolute inset-0 flex items-center justify-center text-sm text-red-500 bg-white/80 pointer-events-none"
+                 x-text="trendChartError"></div>
         </div>
-        <div class="overflow-x-auto mt-5">
+        <div class="overflow-x-auto mt-4">
             <table class="data-table text-sm">
                 <thead>
                     <tr>
@@ -296,6 +299,7 @@ function raporlarApp() {
         trendData: [],
         trendYil: '<?= date('Y') ?>',
         trendChart: null,
+        trendChartError: '',
         servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
         bakimAy: '<?= date('Y-m') ?>',
         karFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
@@ -361,7 +365,94 @@ function raporlarApp() {
         renderTrend() {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
+            this.trendChartError = '';
+            if (typeof Chart === 'undefined') {
+                this.trendChartError = 'Grafik kutuphanesi yuklenemedi.';
+                return;
+            }
             if (this.trendChart) this.trendChart.destroy();
+            this.trendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: this.trendData.map(row => row.label),
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Ciro',
+                            data: this.trendData.map(row => Number(row.toplam_ciro || 0)),
+                            backgroundColor: '#2563eb',
+                            borderRadius: 7,
+                            maxBarThickness: 34,
+                        },
+                        {
+                            type: 'line',
+                            label: 'Tahsilat',
+                            data: this.trendData.map(row => Number(row.tahsilat || 0)),
+                            borderColor: '#059669',
+                            backgroundColor: 'rgba(5,150,105,.12)',
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                        },
+                        {
+                            type: 'line',
+                            label: 'Net Kar',
+                            data: this.trendData.map(row => Number(row.net_kar || 0)),
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245,158,11,.12)',
+                            tension: 0.35,
+                            fill: false,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: { usePointStyle: true, boxWidth: 8, color: '#475569', font: { size: 11 } },
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: items => {
+                                    const row = this.trendData[items[0].dataIndex] || {};
+                                    return `${row.label} ${this.trendYil}`;
+                                },
+                                label: item => `${item.dataset.label}: ${formatCurrency(item.raw)}`,
+                                afterBody: items => {
+                                    const row = this.trendData[items[0].dataIndex] || {};
+                                    return [
+                                        `Satis cirosu: ${formatCurrency(row.satis_ciro || 0)}`,
+                                        `Servis cirosu: ${formatCurrency(row.servis_ciro || 0)}`,
+                                        `Satis adedi: ${row.satis_adet || 0}`,
+                                        `Servis adedi: ${row.servis_adet || 0}`,
+                                    ];
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 11 } } },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#eef2f7' },
+                            border: { display: false },
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                callback: value => Number(value || 0).toLocaleString('tr-TR') + ' TL',
+                            },
+                        },
+                    },
+                },
+            });
+            setTimeout(() => this.trendChart && this.trendChart.resize(), 0);
+            return;
             const data = this.trendData.map(row => row.toplam_ciro || 0);
             this.trendChart = new Chart(ctx, {
                 type: 'line',

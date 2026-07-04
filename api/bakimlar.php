@@ -29,6 +29,11 @@ switch (method()) {
             if (!$b->tamamlandi($musteriId)) json_err('Bakim kaydi bulunamadi.');
             json_ok(null, 'Bakım tamamlandı olarak işaretlendi.');
         }
+        if (isset($data['ertele']) && $musteriId > 0) {
+            $yeniTarih = $data['sonraki_bakim_tarihi'] ?? $data['yeni_tarih'] ?? '';
+            if (!$b->ertele($musteriId, $yeniTarih)) json_err('Bakim kaydi bulunamadi.');
+            json_ok($b->getByMusteriId($musteriId), 'Bakim tarihi ertelendi.');
+        }
         if (!$musteriId) json_err('musteri_id gerekli.');
         $b->update($musteriId, $data);
         json_ok($b->getByMusteriId($musteriId), 'Bakım ayarları güncellendi.');

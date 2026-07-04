@@ -110,6 +110,9 @@ include __DIR__ . '/layout/header.php';
                                     <button class="btn btn-sm btn-success" @click="tamamla(b)">
                                         <i class="fas fa-check text-xs"></i> Tamamlandı
                                     </button>
+                                    <button class="btn btn-sm btn-secondary" @click="ertele(b)">
+                                        <i class="fas fa-clock text-xs"></i> Ertele
+                                    </button>
                                     <button class="btn btn-sm btn-secondary btn-icon" @click="ayarla(b)">
                                         <i class="fas fa-gear text-slate-500 text-xs"></i>
                                     </button>
@@ -176,6 +179,9 @@ include __DIR__ . '/layout/header.php';
                                     <button class="btn btn-sm btn-success" @click="tamamla(b)">
                                         <i class="fas fa-check text-xs"></i> Tamamlandı
                                     </button>
+                                    <button class="btn btn-sm btn-secondary" @click="ertele(b)">
+                                        <i class="fas fa-clock text-xs"></i> Ertele
+                                    </button>
                                     <button class="btn btn-sm btn-secondary btn-icon" @click="ayarla(b)">
                                         <i class="fas fa-gear text-slate-500 text-xs"></i>
                                     </button>
@@ -231,6 +237,43 @@ include __DIR__ . '/layout/header.php';
             </form>
         </div>
     </div>
+    <!-- ===== ERTELE MODAL ===== -->
+    <div x-show="showErtele" x-cloak class="modal-backdrop" @click.self="showErtele=false">
+        <div class="modal-box max-w-md">
+            <div class="modal-header">
+                <h3 class="font-semibold text-slate-800">Bakım Tarihini Ertele</h3>
+                <button @click="showErtele=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            </div>
+            <form @submit.prevent="saveErtele()" class="modal-body space-y-4" novalidate>
+                <div class="bg-slate-50 rounded-lg p-3 text-sm">
+                    <p class="font-semibold text-slate-800" x-text="erteleForm.ad_soyad"></p>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                        Mevcut plan: <span x-text="formatDate(erteleForm.mevcut_tarih) || '—'"></span>
+                    </p>
+                </div>
+                <div>
+                    <label class="form-label">Yeni Bakım Tarihi</label>
+                    <input type="date" class="form-input" x-model="erteleForm.yeni_tarih" :min="today">
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(1)">+1 Ay</button>
+                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(3)">+3 Ay</button>
+                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(6)">+6 Ay</button>
+                </div>
+                <p class="text-xs text-slate-400">
+                    Müşteri bu dönemde bakım istemiyorsa sıradaki takip tarihi buradan ileri alınır; geçmişte gecikti olarak görünmez.
+                </p>
+                <div class="modal-footer px-0 pb-0">
+                    <button type="button" class="btn btn-secondary" @click="showErtele=false">İptal</button>
+                    <button type="submit" class="btn btn-primary" :disabled="saving">
+                        <span x-show="saving" class="spinner w-4 h-4"></span>
+                        Ertele
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- ===== TAKVİM MODAL ===== -->
     <div x-show="showTakvim" x-cloak class="modal-backdrop" @click.self="showTakvim=false" style="z-index:60;">
         <div class="modal-box" style="max-width:860px; max-height:90vh; overflow-y:auto;">
@@ -336,11 +379,14 @@ function bakimlarApp() {
         liste: [],
         loading: false,
         search: '',
+        today: new Date().toISOString().slice(0, 10),
         seciliAy: '<?= date('Y-m') ?>',
         showTakvim: false,
         showAyar: false,
+        showErtele: false,
         saving: false,
         ayarForm: { musteri_id: null, ad_soyad: '', periyot_ay: 6, hatirlatma_gun: 7, son_bakim_tarihi: '', aktif: true, notlar: '' },
+        erteleForm: { musteri_id: null, ad_soyad: '', mevcut_tarih: '', yeni_tarih: '' },
 
         get ayLabel() {
             const ayAdlari = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -466,6 +512,37 @@ function bakimlarApp() {
                 await api(`api/bakimlar.php?musteri_id=${this.ayarForm.musteri_id}`, { method: 'PUT', body: this.ayarForm });
                 showToast('Bakım ayarları kaydedildi.', 'success');
                 this.showAyar = false;
+                await this.loadListe();
+            } catch(e) {} finally { this.saving = false; }
+        },
+
+        ertele(b) {
+            this.erteleForm = {
+                musteri_id: b.musteri_id,
+                ad_soyad: `${b.ad} ${b.soyad}`,
+                mevcut_tarih: b.sonraki_bakim_tarihi || '',
+                yeni_tarih: (b.sonraki_bakim_tarihi && b.sonraki_bakim_tarihi >= this.today) ? b.sonraki_bakim_tarihi : this.today,
+            };
+            this.showErtele = true;
+        },
+
+        erteleAyEkle(ay) {
+            const base = this.erteleForm.yeni_tarih || this.today;
+            const d = new Date(base + 'T12:00:00');
+            d.setMonth(d.getMonth() + ay);
+            this.erteleForm.yeni_tarih = d.toISOString().slice(0, 10);
+        },
+
+        async saveErtele() {
+            if (!this.erteleForm.yeni_tarih) { showToast('Lütfen yeni bakım tarihini seçiniz.', 'error'); return; }
+            this.saving = true;
+            try {
+                await api(`api/bakimlar.php?musteri_id=${this.erteleForm.musteri_id}`, {
+                    method: 'POST',
+                    body: { ertele: true, sonraki_bakim_tarihi: this.erteleForm.yeni_tarih }
+                });
+                showToast('Bakım tarihi ertelendi.', 'success');
+                this.showErtele = false;
                 await this.loadListe();
             } catch(e) {} finally { this.saving = false; }
         },

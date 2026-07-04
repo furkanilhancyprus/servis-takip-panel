@@ -126,9 +126,18 @@ require_once ROOT . '/views/layout/header.php';
         <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <i class="fas fa-calendar-check text-emerald-500"></i> Varsayılan Bakım Ayarları
         </h3>
-        <div class="grid grid-cols-2 gap-4 max-w-sm">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label class="form-label">Bakım Periyodu (Ay)</label><input type="number" class="form-input" min="1" max="60" x-model="ayarlar.varsayilan_bakim_periyodu"></div>
             <div><label class="form-label">Hatırlatma (Gün Önce)</label><input type="number" class="form-input" min="1" max="90" x-model="ayarlar.varsayilan_hatirlatma_gun"></div>
+            <div>
+                <label class="form-label">Periyodik Bakım İşlemi</label>
+                <select class="form-select" x-model="ayarlar.varsayilan_periyodik_islem_id">
+                    <option value="">Boş gelsin</option>
+                    <template x-for="ism in islemler" :key="ism.id">
+                        <option :value="ism.id" x-text="ism.islem_adi"></option>
+                    </template>
+                </select>
+            </div>
         </div>
         <p class="text-xs text-slate-400 mt-2">Bu ayarlar yeni eklenen müşterilere otomatik uygulanır.</p>
     </div>
@@ -337,7 +346,7 @@ require_once ROOT . '/views/layout/header.php';
 function ayarlarApp() {
     return {
         ayarlar: { firma_adi:'', firma_telefon:'', firma_adres:'', firma_email:'', para_birimi:'₺',
-                   varsayilan_bakim_periyodu:6, varsayilan_hatirlatma_gun:7,
+                   varsayilan_bakim_periyodu:6, varsayilan_hatirlatma_gun:7, varsayilan_periyodik_islem_id:'',
                    firma_vergi_no:'', firma_iban:'', fatura_notu:'', fatura_logo:'' },
         islemler: [], cihazlar: [], stoklar: [], saving: false,
         showIslemModal: false, islemEditId: null,

@@ -188,7 +188,7 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="form-label">Servis Tipi <span class="text-red-500">*</span></label>
-                        <select class="form-select" x-model="form.servis_tipi">
+                        <select class="form-select" x-model="form.servis_tipi" @change="handleServisTipiChange()">
                             <option value="">Seçiniz...</option>
                             <option value="ariza">Arıza</option>
                             <option value="periyodik_bakim">Periyodik Bakım</option>
@@ -551,6 +551,7 @@ function servislerApp() {
             tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
         },
         varsayilanPeriyot: 6,
+        varsayilanPeriyodikIslemId: '',
         tahsilatForm: {
             musteri_id: '', kaynak_id: '', kaynak_tip: 'servis',
             musteriAdi: '', kalan: 0, tutar: 0,
@@ -596,6 +597,7 @@ function servislerApp() {
                 const ayarlar = await api('api/ayarlar.php');
                 // getAll() { anahtar: deger } map döndürür
                 this.varsayilanPeriyot = parseInt(ayarlar['varsayilan_bakim_periyodu']) || 6;
+                this.varsayilanPeriyodikIslemId = ayarlar['varsayilan_periyodik_islem_id'] || '';
                 this.form.periyot_ay  = this.varsayilanPeriyot;
             } catch(e) {}
         },
@@ -691,6 +693,24 @@ function servislerApp() {
             if (found && found.varsayilan_fiyat > 0) islem.tutar = found.varsayilan_fiyat;
             this._refreshDahilParcalar();
             this.calcTotal();
+        },
+
+        handleServisTipiChange() {
+            if (this.form.servis_tipi === 'periyodik_bakim') {
+                this.applyVarsayilanPeriyodikIslem();
+            }
+        },
+
+        applyVarsayilanPeriyodikIslem() {
+            if (!this.varsayilanPeriyodikIslemId) return;
+            const found = this.standartIslemler.find(si => String(si.id) === String(this.varsayilanPeriyodikIslemId));
+            if (!found) return;
+            const hasUserOperation = this.form.islemler.some(i => i.islem && i.islem !== '__manual');
+            if (hasUserOperation) return;
+            if (this.form.islemler.length === 0) this.addIslem();
+            this.form.islemler[0].islem = found.islem_adi;
+            this.form.islemler[0].manuel_islem = '';
+            this.applyStandartFiyat(this.form.islemler[0]);
         },
 
         // Seçili tüm işlemlerin dahil parçalarını yeniden hesapla

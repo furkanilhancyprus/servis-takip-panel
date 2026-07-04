@@ -81,8 +81,16 @@ class Satis extends Model {
         $seriNo     = $data['seri_no'] ?? null;
         $musteriId  = (int)($data['musteri_id'] ?? 0);
         $this->requireMusteri($musteriId);
+        $cihazRow = null;
         if ($cihazId) {
             $this->requireCihaz($cihazId);
+            $cihazRow = $this->db->fetchOne(
+                "SELECT c.*, p.maliyet_usd, p.stok_miktari
+                 FROM cihazlar c
+                 LEFT JOIN parcalar p ON p.id=c.parca_id AND p.deleted_at IS NULL
+                 WHERE c.id=? AND c.firma_id=? AND c.deleted_at IS NULL",
+                [$cihazId, $this->firmaId]
+            );
         }
 
         // Toplam hesapla
@@ -92,6 +100,21 @@ class Satis extends Model {
             $toplam += ($k['miktar'] ?? 1) * ($k['birim_fiyat'] ?? 0);
         }
         if (empty($kalemler)) $toplam = (float)($data['toplam_tutar'] ?? 0);
+        if (empty($kalemler) && $cihazRow) {
+            if ($toplam <= 0) {
+                $toplam = (float)($cihazRow['varsayilan_fiyat'] ?? 0);
+            }
+            $kalemler[] = [
+                'urun_adi' => trim(implode(' ', array_filter([
+                    $cihazRow['marka'] ?? '',
+                    $cihazRow['model'] ?? '',
+                    $cihazRow['cihaz_adi'] ?? 'Cihaz',
+                ]))),
+                'miktar' => 1,
+                'birim_fiyat' => $toplam,
+                'parca_id' => $cihazRow['parca_id'] ?? null,
+            ];
+        }
 
         // Peşinli satışta ilk ödeme durumu
         $odenenBaslangic = 0;
@@ -215,17 +238,24 @@ class Satis extends Model {
     public function getMaliyetByDateRange(string $baslangic, string $bitis, float $usdKur = 0): float {
         $pesinMaliyet = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(
-                sk.miktar
-                * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-                * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                CASE
+                    WHEN sk.id IS NOT NULL THEN
+                        sk.miktar
+                        * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                        * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                    ELSE
+                        COALESCE(cp.maliyet_usd, 0) * ?
+                END
              ),0)
-             FROM satis_kalemleri sk
-             JOIN satislar s ON s.id=sk.satis_id AND s.deleted_at IS NULL
+             FROM satislar s
+             LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
              LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+             LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
+             LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
              WHERE s.firma_id=? AND sk.deleted_at IS NULL
                AND s.odeme_turu <> 'taksitli'
                AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
-            [$usdKur, $this->firmaId, $baslangic, $bitis]
+            [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
         );
 
         $taksitliMaliyet = (float)$this->db->fetchColumn(
@@ -234,11 +264,14 @@ class Satis extends Model {
              ),0)
              FROM (
                 SELECT s.id, s.toplam_tutar,
-                       COALESCE(SUM(
-                           sk.miktar
-                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
-                       ),0) AS toplam_maliyet,
+                       CASE
+                           WHEN COUNT(sk.id) > 0 THEN COALESCE(SUM(
+                               sk.miktar
+                               * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                               * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                           ),0)
+                           ELSE COALESCE(cp.maliyet_usd, 0) * ?
+                       END AS toplam_maliyet,
                        (
                            SELECT COALESCE(SUM(t.tutar),0)
                            FROM taksitler t
@@ -248,10 +281,12 @@ class Satis extends Model {
                 FROM satislar s
                 LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
                 LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
+                LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
                 WHERE s.firma_id=? AND s.deleted_at IS NULL AND s.odeme_turu='taksitli'
                 GROUP BY s.id
              )",
-            [$usdKur, $baslangic, $bitis, $this->firmaId]
+            [$usdKur, $usdKur, $baslangic, $bitis, $this->firmaId]
         );
 
         return $pesinMaliyet + $taksitliMaliyet;

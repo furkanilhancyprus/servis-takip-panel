@@ -16,8 +16,8 @@ class PeriyodikBakim extends Model {
         $ok = $this->db->fetchColumn("SELECT id FROM musteriler WHERE id=? AND firma_id=? AND deleted_at IS NULL", [$musteriId, $this->firmaId]);
         if (!$ok) return false;
 
-        $sonraki = null;
-        if (!empty($data['son_bakim_tarihi']) && !empty($data['periyot_ay'])) {
+        $sonraki = !empty($data['sonraki_bakim_tarihi']) ? $data['sonraki_bakim_tarihi'] : null;
+        if (!$sonraki && !empty($data['son_bakim_tarihi']) && !empty($data['periyot_ay'])) {
             $sonraki = date('Y-m-d', strtotime($data['son_bakim_tarihi'] . " +" . (int)$data['periyot_ay'] . " months"));
         }
 
@@ -45,6 +45,32 @@ class PeriyodikBakim extends Model {
             ]);
         }
 
+        return true;
+    }
+
+    public function ertele(int $musteriId, string $yeniTarih): bool {
+        $this->requireMusteri($musteriId);
+
+        $yeniTarih = trim($yeniTarih);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $yeniTarih)) {
+            throw new InvalidArgumentException('Gecerli bir erteleme tarihi gerekli.');
+        }
+        if ($yeniTarih < date('Y-m-d')) {
+            throw new InvalidArgumentException('Erteleme tarihi bugunden once olamaz.');
+        }
+
+        $exists = $this->db->fetchColumn(
+            "SELECT id FROM periyodik_bakimlar WHERE musteri_id=? AND deleted_at IS NULL",
+            [$musteriId]
+        );
+        if (!$exists) {
+            return false;
+        }
+
+        $this->db->query(
+            "UPDATE periyodik_bakimlar SET sonraki_bakim_tarihi=?, aktif=1, synced_at=NULL WHERE musteri_id=? AND deleted_at IS NULL",
+            [$yeniTarih, $musteriId]
+        );
         return true;
     }
 
