@@ -192,12 +192,6 @@ switch ($tip) {
             $baslangic = "{$yil}-{$ayNo}-01";
             $bitis = date('Y-m-t', strtotime($baslangic));
 
-            $satis = $db->fetchOne("
-                SELECT COUNT(*) AS adet
-                FROM satislar
-                WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
-            ", [$fid, $baslangic, $bitis]);
-
             $servis = $db->fetchOne("
                 SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
                 FROM servisler
@@ -232,7 +226,7 @@ switch ($tip) {
             $rows[] = [
                 'ay' => $ayNo,
                 'label' => ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][$ay - 1],
-                'satis_adet' => (int)($satis['adet'] ?? 0),
+                'satis_adet' => $satisModel->getAdetByDateRange($baslangic, $bitis),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
                 'satis_ciro' => $satisCiro,
                 'servis_ciro' => $servisCiro,
@@ -261,12 +255,6 @@ switch ($tip) {
         $bitis = $_GET['bitis'] ?? date('Y-m-d');
         $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
         $satisModel = new Satis();
-
-        $satis = $db->fetchOne("
-            SELECT COUNT(*) AS adet
-            FROM satislar
-            WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
-        ", [$fid, $baslangic, $bitis]);
 
         $servis = $db->fetchOne("
             SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
@@ -300,7 +288,7 @@ switch ($tip) {
                 'baslangic' => $baslangic,
                 'bitis' => $bitis,
                 'usd_try' => $usdKur,
-                'satis_adet' => (int)($satis['adet'] ?? 0),
+                'satis_adet' => $satisModel->getAdetByDateRange($baslangic, $bitis),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
                 'satis_ciro' => $satisCiro,
                 'servis_ciro' => $servisCiro,

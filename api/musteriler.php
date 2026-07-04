@@ -7,6 +7,13 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 switch (method()) {
     case 'GET':
+        if (isset($_GET['similar'])) {
+            json_ok($m->findSimilar([
+                'ad' => $_GET['ad'] ?? '',
+                'soyad' => $_GET['soyad'] ?? '',
+                'telefon' => $_GET['telefon'] ?? '',
+            ], (int)($_GET['exclude_id'] ?? 0)));
+        }
         // İstatistik özeti
         if (isset($_GET['stats'])) {
             json_ok($m->getStats());

@@ -32,7 +32,7 @@ include __DIR__ . '/layout/header.php';
             <div>
                 <h3 class="font-semibold text-slate-800">Ciro / Maliyet / Net Kâr</h3>
                 <p class="text-sm text-slate-500 mt-1">
-                    Satış ve servis cirosunu, stok maliyetlerini ve net kârı hesaplar.
+                    Satış ve servis cirosunu, stok maliyetlerini ve net kârı hesaplar. Taksitli satışlarda ciro ve maliyet vade aylarına dağıtılır.
                     <span x-show="doviz.usd_try" x-text="` USD kuru: ${doviz.usd_try.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ₺`"></span>
                 </p>
             </div>
@@ -60,7 +60,7 @@ include __DIR__ . '/layout/header.php';
             <div class="rounded-lg bg-orange-50 border border-orange-100 p-4">
                 <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide">Toplam Maliyet</p>
                 <p class="text-2xl font-bold text-orange-700 mt-1" x-text="formatCurrency(karOzet.toplam_maliyet || 0)"></p>
-                <p class="text-xs text-orange-600 mt-1">Stok maliyetlerinden hesaplanır</p>
+                <p class="text-xs text-orange-600 mt-1">Taksitli satışta maliyet taksit aylarına bölünür</p>
             </div>
             <div class="rounded-lg border p-4"
                  :class="(karOzet.net_kar || 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'">

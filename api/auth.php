@@ -62,6 +62,10 @@ function create_sync_token(Database $db, int $firmaId, string $deviceName = '', 
     return $token;
 }
 
+function reset_token_hash(string $token): string {
+    return hash('sha256', $token);
+}
+
 // ── KAYIT ───────────────────────────────────────────────────────────────────
 if ($action === 'kayit') {
     $input     = get_input();
@@ -186,6 +190,91 @@ if ($action === 'desktop_login' || $action === 'mobile_login') {
         'email' => $kullanici['email'],
         'server_time' => date('c'),
     ], $action === 'mobile_login' ? 'Mobil baglantisi basarili.' : 'Masaustu baglantisi basarili.');
+}
+
+if ($action === 'sifre_talep') {
+    $input = get_input();
+    $email = strtolower(trim($input['email'] ?? ''));
+    if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        json_err('Geçerli bir e-posta adresi girin.');
+    }
+
+    $kullanici = $db->fetchOne(
+        "SELECT id FROM kullanicilar WHERE email=? AND deleted_at IS NULL",
+        [$email]
+    );
+
+    $db->execute(
+        "INSERT INTO password_reset_requests (firma_id, email, durum, requested_ip, user_agent)
+         VALUES (?, ?, 'bekliyor', ?, ?)",
+        [$kullanici['id'] ?? null, $email, request_ip(), $_SERVER['HTTP_USER_AGENT'] ?? '']
+    );
+
+    json_ok(null, 'Talebiniz alındı. Destek ekibi sıfırlama linkini size iletecek.');
+}
+
+if ($action === 'reset_kontrol') {
+    $token = trim($_GET['token'] ?? '');
+    if ($token === '') {
+        json_err('Sıfırlama bağlantısı geçersiz.', 404);
+    }
+    $row = $db->fetchOne(
+        "SELECT pr.id, pr.email, pr.expires_at, pr.used_at, k.firma_adi, k.ad_soyad
+         FROM password_reset_requests pr
+         JOIN kullanicilar k ON k.id=pr.firma_id AND k.deleted_at IS NULL
+         WHERE pr.token_hash=? AND pr.durum='link_gonderildi'
+         LIMIT 1",
+        [reset_token_hash($token)]
+    );
+    if (!$row || !empty($row['used_at']) || strtotime((string)$row['expires_at']) < time()) {
+        json_err('Sıfırlama bağlantısı süresi dolmuş veya kullanılmış.', 410);
+    }
+    json_ok([
+        'email' => $row['email'],
+        'firma_adi' => $row['firma_adi'],
+        'ad_soyad' => $row['ad_soyad'],
+    ]);
+}
+
+if ($action === 'sifre_sifirla') {
+    $input = get_input();
+    $token = trim($input['token'] ?? '');
+    $sifre = $input['sifre'] ?? '';
+    $sifre2 = $input['sifre2'] ?? '';
+    if ($token === '') {
+        json_err('Sıfırlama bağlantısı geçersiz.');
+    }
+    if (strlen($sifre) < 6) {
+        json_err('Şifre en az 6 karakter olmalıdır.');
+    }
+    if ($sifre !== $sifre2) {
+        json_err('Şifreler eşleşmiyor.');
+    }
+
+    $row = $db->fetchOne(
+        "SELECT pr.id, pr.firma_id, pr.expires_at, pr.used_at
+         FROM password_reset_requests pr
+         JOIN kullanicilar k ON k.id=pr.firma_id AND k.deleted_at IS NULL
+         WHERE pr.token_hash=? AND pr.durum='link_gonderildi'
+         LIMIT 1",
+        [reset_token_hash($token)]
+    );
+    if (!$row || !empty($row['used_at']) || strtotime((string)$row['expires_at']) < time()) {
+        json_err('Sıfırlama bağlantısı süresi dolmuş veya kullanılmış.', 410);
+    }
+
+    $db->query("UPDATE kullanicilar SET sifre=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", [
+        password_hash($sifre, PASSWORD_BCRYPT),
+        (int)$row['firma_id'],
+    ]);
+    $db->query(
+        "UPDATE password_reset_requests SET durum='kullanildi', used_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        [(int)$row['id']]
+    );
+    $db->query("UPDATE remember_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE firma_id=? AND revoked_at IS NULL", [(int)$row['firma_id']]);
+    $db->query("UPDATE sync_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE firma_id=? AND revoked_at IS NULL", [(int)$row['firma_id']]);
+
+    json_ok(null, 'Şifreniz yenilendi. Yeni şifrenizle giriş yapabilirsiniz.');
 }
 
 // ── ÇIKIŞ ───────────────────────────────────────────────────────────────────

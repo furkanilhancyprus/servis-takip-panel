@@ -148,14 +148,14 @@ include __DIR__ . '/layout/header.php';
                         <template x-for="m in similarCustomers" :key="m.id">
                             <div class="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-2 py-1.5">
                                 <span class="font-medium" x-text="m.ad + ' ' + m.soyad"></span>
-                                <span class="text-xs text-amber-700" x-text="m.telefon || 'Telefon yok'"></span>
+                                <span class="text-xs text-amber-700" x-text="`${m.benzerlik_nedeni || 'Benzer kayıt'} · ${m.telefon || 'Telefon yok'}`"></span>
                             </div>
                         </template>
                     </div>
                 </div>
                 <div>
                     <label class="form-label">Telefon</label>
-                    <input type="tel" class="form-input" x-model="form.telefon">
+                    <input type="tel" class="form-input" x-model="form.telefon" @input.debounce.400ms="checkSimilarCustomers()">
                 </div>
 
                 <!-- Adres + Harita Toggle -->
@@ -667,11 +667,17 @@ function musterilerApp() {
             if (this.editId) { this.similarCustomers = []; return; }
             const ad = this.normalizeText(this.form.ad);
             const soyad = this.normalizeText(this.form.soyad);
-            if ((ad + soyad).length < 3) { this.similarCustomers = []; return; }
-            const query = [ad, soyad].filter(Boolean).join(' ');
+            const phone = String(this.form.telefon || '').replace(/\D+/g, '');
+            if ((ad + soyad).length < 3 && phone.length < 5) { this.similarCustomers = []; return; }
             try {
-                const rows = await api(`api/musteriler.php?search=${encodeURIComponent(query)}`);
-                this.similarCustomers = (rows || []).slice(0, 4);
+                const p = new URLSearchParams({
+                    similar: '1',
+                    ad: this.form.ad || '',
+                    soyad: this.form.soyad || '',
+                    telefon: this.form.telefon || '',
+                });
+                const rows = await api(`api/musteriler.php?${p}`);
+                this.similarCustomers = (rows || []).slice(0, 6);
             } catch(e) {
                 this.similarCustomers = [];
             }

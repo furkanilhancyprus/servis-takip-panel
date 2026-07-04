@@ -235,58 +235,101 @@ class Satis extends Model {
         return $pesinCiro + $taksitCiro;
     }
 
+    public function getAdetByDateRange(string $baslangic, string $bitis): int {
+        $pesinAdet = (int)$this->db->fetchColumn(
+            "SELECT COUNT(*)
+             FROM satislar
+             WHERE firma_id=? AND deleted_at IS NULL
+               AND odeme_turu <> 'taksitli'
+               AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $baslangic, $bitis]
+        );
+
+        $taksitliAdet = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT s.id)
+             FROM satislar s
+             JOIN taksitler t ON t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
+             WHERE s.firma_id=? AND s.deleted_at IS NULL
+               AND s.odeme_turu='taksitli'
+               AND t.taksit_no > 0
+               AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $baslangic, $bitis]
+        );
+
+        return $pesinAdet + $taksitliAdet;
+    }
+
     public function getMaliyetByDateRange(string $baslangic, string $bitis, float $usdKur = 0): float {
         $pesinMaliyet = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(
                 CASE
-                    WHEN sk.id IS NOT NULL THEN
-                        sk.miktar
-                        * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-                        * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
-                    ELSE
-                        COALESCE(cp.maliyet_usd, 0) * ?
+                    WHEN line_cost > 0 THEN line_cost
+                    ELSE device_cost
                 END
-             ),0)
-             FROM satislar s
-             LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
-             LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
-             LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
-             LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
-             WHERE s.firma_id=? AND sk.deleted_at IS NULL
-               AND s.odeme_turu <> 'taksitli'
-               AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
-            [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
-        );
-
-        $taksitliMaliyet = (float)$this->db->fetchColumn(
-            "SELECT COALESCE(SUM(
-                CASE WHEN toplam_tutar > 0 THEN toplam_maliyet * (donem_taksit / toplam_tutar) ELSE 0 END
-             ),0)
-             FROM (
-                SELECT s.id, s.toplam_tutar,
-                       CASE
-                           WHEN COUNT(sk.id) > 0 THEN COALESCE(SUM(
-                               sk.miktar
-                               * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-                               * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
-                           ),0)
-                           ELSE COALESCE(cp.maliyet_usd, 0) * ?
-                       END AS toplam_maliyet,
-                       (
-                           SELECT COALESCE(SUM(t.tutar),0)
-                           FROM taksitler t
-                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
-                             AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
-                       ) AS donem_taksit
+            ),0)
+            FROM (
+                SELECT s.id,
+                       COALESCE(SUM(
+                           sk.miktar
+                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                       ),0) AS line_cost,
+                       COALESCE(cp.maliyet_usd, 0) * ? AS device_cost
                 FROM satislar s
                 LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
                 LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
                 LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
                 LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
-                WHERE s.firma_id=? AND s.deleted_at IS NULL AND s.odeme_turu='taksitli'
+                WHERE s.firma_id=? AND s.deleted_at IS NULL
+                  AND s.odeme_turu <> 'taksitli'
+                  AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
                 GROUP BY s.id
+            )",
+            [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
+        );
+
+        $taksitliMaliyet = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(
+                CASE WHEN taksit_sayisi > 0 THEN toplam_maliyet * donem_taksit_adet / taksit_sayisi ELSE 0 END
+             ),0)
+             FROM (
+                SELECT s.id,
+                       CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END AS toplam_maliyet,
+                       (
+                           SELECT COUNT(*)
+                           FROM taksitler t
+                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
+                             AND t.taksit_no > 0
+                             AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
+                       ) AS donem_taksit_adet,
+                       (
+                           SELECT COUNT(*)
+                           FROM taksitler t
+                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
+                             AND t.taksit_no > 0
+                       ) AS taksit_sayisi
+                FROM satislar s
+                LEFT JOIN (
+                    SELECT sk.satis_id,
+                           COALESCE(SUM(
+                               sk.miktar
+                               * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                               * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                           ),0) AS line_cost
+                    FROM satis_kalemleri sk
+                    LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                    WHERE sk.deleted_at IS NULL
+                    GROUP BY sk.satis_id
+                ) lc ON lc.satis_id=s.id
+                LEFT JOIN (
+                    SELECT c2.id AS cihaz_id, COALESCE(p2.maliyet_usd, 0) * ? AS device_cost
+                    FROM cihazlar c2
+                    LEFT JOIN parcalar p2 ON p2.id=c2.parca_id AND p2.deleted_at IS NULL
+                    WHERE c2.deleted_at IS NULL
+                ) dc ON dc.cihaz_id=s.cihaz_id
+                WHERE s.firma_id=? AND s.deleted_at IS NULL AND s.odeme_turu='taksitli'
              )",
-            [$usdKur, $usdKur, $baslangic, $bitis, $this->firmaId]
+            [$baslangic, $bitis, $usdKur, $usdKur, $this->firmaId]
         );
 
         return $pesinMaliyet + $taksitliMaliyet;

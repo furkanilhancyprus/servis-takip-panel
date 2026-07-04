@@ -215,6 +215,91 @@ class Musteri extends Model {
         ];
     }
 
+    public function findSimilar(array $data, int $excludeId = 0): array {
+        $ad = $this->normalizeSearchText($data['ad'] ?? '');
+        $soyad = $this->normalizeSearchText($data['soyad'] ?? '');
+        $fullName = trim($ad . ' ' . $soyad);
+        $phone = $this->normalizePhone($data['telefon'] ?? '');
+
+        if (strlen(str_replace(' ', '', $fullName)) < 3 && strlen($phone) < 5) {
+            return [];
+        }
+
+        $params = [$this->firmaId];
+        $excludeSql = '';
+        if ($excludeId > 0) {
+            $excludeSql = ' AND id != ?';
+            $params[] = $excludeId;
+        }
+
+        $rows = $this->db->fetchAll("
+            SELECT id, ad, soyad, telefon, adres, created_at
+            FROM musteriler
+            WHERE firma_id=? AND deleted_at IS NULL{$excludeSql}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 500
+        ", $params);
+
+        $matches = [];
+        foreach ($rows as $row) {
+            $rowName = $this->normalizeSearchText(trim(($row['ad'] ?? '') . ' ' . ($row['soyad'] ?? '')));
+            $rowPhone = $this->normalizePhone($row['telefon'] ?? '');
+            $reasons = [];
+            $score = 0;
+
+            if ($phone !== '' && $rowPhone !== '') {
+                if ($phone === $rowPhone) {
+                    $score += 100;
+                    $reasons[] = 'Telefon birebir aynı';
+                } elseif (strlen($phone) >= 7 && ($this->endsWith($rowPhone, $phone) || $this->endsWith($phone, $rowPhone))) {
+                    $score += 75;
+                    $reasons[] = 'Telefon çok benzer';
+                }
+            }
+
+            if ($fullName !== '' && $rowName !== '') {
+                if ($rowName === $fullName) {
+                    $score += 80;
+                    $reasons[] = 'Ad soyad birebir aynı';
+                } elseif (strpos($rowName, $fullName) !== false || strpos($fullName, $rowName) !== false) {
+                    $score += 55;
+                    $reasons[] = 'Ad soyad benzer';
+                } else {
+                    similar_text($fullName, $rowName, $percent);
+                    if ($percent >= 78) {
+                        $score += (int)$percent - 25;
+                        $reasons[] = 'Ad soyad yakın eşleşme';
+                    }
+                }
+            }
+
+            if ($score > 0) {
+                $row['benzerlik_skoru'] = $score;
+                $row['benzerlik_nedeni'] = implode(', ', array_unique($reasons));
+                $matches[] = $row;
+            }
+        }
+
+        usort($matches, fn($a, $b) => ($b['benzerlik_skoru'] <=> $a['benzerlik_skoru']) ?: strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
+        return array_slice($matches, 0, 6);
+    }
+
+    private function normalizePhone($value): string {
+        $digits = preg_replace('/\D+/', '', (string)$value);
+        if (str_starts_with($digits, '90') && strlen($digits) > 10) {
+            $digits = substr($digits, 2);
+        }
+        if (str_starts_with($digits, '0') && strlen($digits) > 10) {
+            $digits = substr($digits, 1);
+        }
+        return $digits;
+    }
+
+    private function endsWith(string $value, string $suffix): bool {
+        if ($suffix === '') return true;
+        return substr($value, -strlen($suffix)) === $suffix;
+    }
+
     private function calcBakimDurumu(array $m): string {
         if (empty($m['sonraki_bakim_tarihi'])) return 'ayarsiz';
         $diff = (int) round((strtotime($m['sonraki_bakim_tarihi']) - time()) / 86400);

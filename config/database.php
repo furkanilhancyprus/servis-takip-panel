@@ -92,6 +92,7 @@ class Database {
                 ad_soyad    TEXT NOT NULL,
                 email       TEXT UNIQUE NOT NULL,
                 sifre       TEXT NOT NULL,
+                role        TEXT DEFAULT 'super_admin',
                 aktif       INTEGER DEFAULT 1,
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_login_at DATETIME
@@ -131,6 +132,53 @@ class Database {
                 read_at         DATETIME,
                 created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (conversation_id) REFERENCES support_conversations(id) ON DELETE CASCADE,
+                FOREIGN KEY (admin_id) REFERENCES admin_users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS password_reset_requests (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id        INTEGER,
+                email           TEXT NOT NULL,
+                durum           TEXT DEFAULT 'bekliyor',
+                requested_ip    TEXT,
+                user_agent      TEXT,
+                admin_id        INTEGER,
+                token_hash      TEXT,
+                expires_at      DATETIME,
+                sent_at         DATETIME,
+                used_at         DATETIME,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE SET NULL,
+                FOREIGN KEY (admin_id) REFERENCES admin_users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS admin_activity_logs (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id        INTEGER,
+                firma_id        INTEGER,
+                action          TEXT NOT NULL,
+                description     TEXT,
+                ip_address      TEXT,
+                user_agent      TEXT,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (admin_id) REFERENCES admin_users(id),
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS subscription_payments (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id        INTEGER NOT NULL,
+                admin_id        INTEGER,
+                paket           TEXT,
+                tutar           REAL NOT NULL DEFAULT 0,
+                para_birimi     TEXT DEFAULT 'TRY',
+                odeme_yontemi   TEXT,
+                donem_baslangic DATE,
+                donem_bitis     DATE,
+                notlar          TEXT,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE,
                 FOREIGN KEY (admin_id) REFERENCES admin_users(id)
             );
         ");
@@ -380,6 +428,7 @@ class Database {
             ['cihazlar', 'parca_id', "ALTER TABLE cihazlar ADD COLUMN parca_id INTEGER"],
             ['kullanicilar', 'abonelik_durumu', "ALTER TABLE kullanicilar ADD COLUMN abonelik_durumu TEXT DEFAULT 'aktif'"],
             ['kullanicilar', 'abonelik_bitis', "ALTER TABLE kullanicilar ADD COLUMN abonelik_bitis DATE"],
+            ['admin_users', 'role', "ALTER TABLE admin_users ADD COLUMN role TEXT DEFAULT 'super_admin'"],
         ];
         $syncTables = [
             'kullanicilar', 'musteriler', 'standart_islemler', 'periyodik_bakimlar',

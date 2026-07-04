@@ -37,6 +37,94 @@ function admin_money($value): string {
     return number_format((float)$value, 2, ',', '.') . ' ₺';
 }
 
+function admin_base_url(): string {
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $scheme = $https ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $path = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+    return $scheme . '://' . $host . ($path === '' ? '' : $path);
+}
+
+function admin_create_reset_link(Database $db, int $firmaId, ?int $requestId = null): string {
+    $firma = $db->fetchOne(
+        "SELECT id, email FROM kullanicilar WHERE id=? AND deleted_at IS NULL",
+        [$firmaId]
+    );
+    if (!$firma) {
+        admin_redirect('Şifre sıfırlanacak kullanıcı bulunamadı.', 'error');
+    }
+
+    $token = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+    $expires = date('Y-m-d H:i:s', time() + 60 * 60 * 24);
+    $tokenHash = hash('sha256', $token);
+
+    if ($requestId) {
+        $db->query(
+            "UPDATE password_reset_requests
+             SET firma_id=?, email=?, durum='link_gonderildi', admin_id=?, token_hash=?, expires_at=?, sent_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+             WHERE id=?",
+            [$firmaId, $firma['email'], (int)$_SESSION['admin_id'], $tokenHash, $expires, $requestId]
+        );
+    } else {
+        $db->execute(
+            "INSERT INTO password_reset_requests (firma_id, email, durum, admin_id, token_hash, expires_at, sent_at)
+             VALUES (?, ?, 'link_gonderildi', ?, ?, ?, CURRENT_TIMESTAMP)",
+            [$firmaId, $firma['email'], (int)$_SESSION['admin_id'], $tokenHash, $expires]
+        );
+    }
+
+    return admin_base_url() . '/sifre-sifirla.php?token=' . rawurlencode($token);
+}
+
+function admin_client_ip(): string {
+    foreach ([$_SERVER['HTTP_CF_CONNECTING_IP'] ?? '', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '', $_SERVER['REMOTE_ADDR'] ?? ''] as $ip) {
+        $ip = trim(explode(',', (string)$ip)[0]);
+        if ($ip !== '') return $ip;
+    }
+    return '';
+}
+
+function admin_log(Database $db, string $action, string $description = '', ?int $firmaId = null): void {
+    try {
+        $db->execute(
+            "INSERT INTO admin_activity_logs (admin_id, firma_id, action, description, ip_address, user_agent)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                $_SESSION['admin_id'] ?? null,
+                $firmaId,
+                $action,
+                $description,
+                admin_client_ip(),
+                $_SERVER['HTTP_USER_AGENT'] ?? '',
+            ]
+        );
+    } catch (Throwable $e) {
+        // Log kaydı yönetim işlemini engellemesin.
+    }
+}
+
+function admin_role(): string {
+    return $_SESSION['admin_role'] ?? 'super_admin';
+}
+
+function admin_can(string $capability): bool {
+    $role = admin_role();
+    if ($role === 'super_admin') return true;
+    $map = [
+        'support' => ['support', 'finance'],
+        'finance' => ['finance'],
+        'view' => ['support', 'finance', 'viewer'],
+    ];
+    return in_array($role, $map[$capability] ?? [], true);
+}
+
+function admin_require_capability(string $capability): void {
+    if (!admin_can($capability)) {
+        admin_redirect('Bu işlem için admin yetkiniz yok.', 'error');
+    }
+}
+
 $adminCount = (int) $db->fetchColumn("SELECT COUNT(*) FROM admin_users");
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -74,7 +162,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
     $sifre = $_POST['sifre'] ?? '';
     $admin = $db->fetchOne(
-        "SELECT id, ad_soyad, email, sifre, aktif FROM admin_users WHERE email=?",
+        "SELECT id, ad_soyad, email, sifre, aktif, role FROM admin_users WHERE email=?",
         [$email]
     );
 
@@ -87,13 +175,91 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $_SESSION['admin_id'] = (int)$admin['id'];
     $_SESSION['admin_name'] = $admin['ad_soyad'];
+    $_SESSION['admin_role'] = $admin['role'] ?: 'super_admin';
     $db->query("UPDATE admin_users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", [$admin['id']]);
     admin_redirect('Giriş başarılı.');
 }
 
 if ($action === 'logout') {
-    unset($_SESSION['admin_id'], $_SESSION['admin_name']);
+    unset($_SESSION['admin_id'], $_SESSION['admin_name'], $_SESSION['admin_role']);
     admin_redirect('Çıkış yapıldı.');
+}
+
+if ($action === 'export_users' && !empty($_SESSION['admin_id'])) {
+    admin_require_capability('view');
+    $rows = $db->fetchAll("
+        SELECT firma_adi, ad_soyad, email, telefon, paket, abonelik_bitis, aktif, created_at
+        FROM kullanicilar
+        WHERE deleted_at IS NULL
+        ORDER BY created_at DESC
+    ");
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=\"servis-takip-panel-firmalar.csv\"');
+    echo "\xEF\xBB\xBF";
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Firma', 'Yetkili', 'E-posta', 'Telefon', 'Paket', 'Abonelik Bitiş', 'Aktif', 'Kayıt Tarihi'], ';');
+    foreach ($rows as $row) {
+        fputcsv($out, [
+            $row['firma_adi'],
+            $row['ad_soyad'],
+            $row['email'],
+            $row['telefon'],
+            admin_plan_label($row['paket'] ?: 'ucretsiz'),
+            $row['abonelik_bitis'],
+            (int)$row['aktif'] ? 'Aktif' : 'Pasif',
+            $row['created_at'],
+        ], ';');
+    }
+    admin_log($db, 'users_exported', 'Firma listesi CSV olarak indirildi.');
+    exit;
+}
+
+if ($action === 'create_admin_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_SESSION['admin_id'])) {
+        admin_redirect('Önce admin girişi yapın.', 'error');
+    }
+    admin_require_csrf();
+    admin_require_capability('super_admin');
+    $ad = trim($_POST['ad_soyad'] ?? '');
+    $email = strtolower(trim($_POST['email'] ?? ''));
+    $sifre = $_POST['sifre'] ?? '';
+    $role = $_POST['role'] ?? 'support';
+    if (!$ad || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($sifre) < 8) {
+        admin_redirect('Admin eklemek için ad, geçerli e-posta ve en az 8 karakter şifre gerekli.', 'error');
+    }
+    if (!in_array($role, ['super_admin', 'support', 'finance', 'viewer'], true)) {
+        $role = 'support';
+    }
+    $exists = $db->fetchColumn("SELECT COUNT(*) FROM admin_users WHERE email=?", [$email]);
+    if ($exists) {
+        admin_redirect('Bu admin e-postası zaten kayıtlı.', 'error');
+    }
+    $db->execute(
+        "INSERT INTO admin_users (ad_soyad, email, sifre, role, aktif) VALUES (?, ?, ?, ?, 1)",
+        [$ad, $email, password_hash($sifre, PASSWORD_BCRYPT), $role]
+    );
+    admin_log($db, 'admin_user_created', "{$email} admin kullanıcısı oluşturuldu.");
+    admin_redirect('Admin kullanıcısı oluşturuldu.');
+}
+
+if ($action === 'update_admin_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_SESSION['admin_id'])) {
+        admin_redirect('Önce admin girişi yapın.', 'error');
+    }
+    admin_require_csrf();
+    admin_require_capability('super_admin');
+    $adminId = (int)($_POST['admin_user_id'] ?? 0);
+    $role = $_POST['role'] ?? 'support';
+    $aktif = isset($_POST['aktif']) ? 1 : 0;
+    if ($adminId <= 0 || !in_array($role, ['super_admin', 'support', 'finance', 'viewer'], true)) {
+        admin_redirect('Admin güncellemesi geçersiz.', 'error');
+    }
+    if ($adminId === (int)$_SESSION['admin_id'] && !$aktif) {
+        admin_redirect('Kendi admin hesabınızı pasife alamazsınız.', 'error');
+    }
+    $db->query("UPDATE admin_users SET role=?, aktif=? WHERE id=?", [$role, $aktif, $adminId]);
+    admin_log($db, 'admin_user_updated', "Admin #{$adminId} rol={$role}, aktif={$aktif}");
+    admin_redirect('Admin kullanıcısı güncellendi.');
 }
 
 if ($action === 'update_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -116,7 +282,72 @@ if ($action === 'update_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         "UPDATE kullanicilar SET paket=?, abonelik_bitis=?, aktif=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
         [$paket, $abonelikBitis ?: null, $aktif, $id]
     );
+    admin_log($db, 'user_updated', "Paket: {$paket}, aktif: {$aktif}, bitis: " . ($abonelikBitis ?: '-'), $id);
     admin_redirect('Kullanıcı güncellendi.');
+}
+
+if ($action === 'create_reset_link' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_SESSION['admin_id'])) {
+        admin_redirect('Önce admin girişi yapın.', 'error');
+    }
+    admin_require_csrf();
+    $firmaId = (int)($_POST['firma_id'] ?? 0);
+    $requestId = (int)($_POST['request_id'] ?? 0);
+    if ($firmaId <= 0) {
+        admin_redirect('Şifre linki için kullanıcı seçin.', 'error');
+    }
+    $link = admin_create_reset_link($db, $firmaId, $requestId > 0 ? $requestId : null);
+    admin_log($db, 'password_reset_link_created', 'Şifre sıfırlama linki oluşturuldu.', $firmaId);
+    $_SESSION['admin_reset_link'] = $link;
+    admin_redirect('Şifre sıfırlama linki oluşturuldu. Linki müşteriye iletebilirsiniz.');
+}
+
+if ($action === 'add_subscription_payment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_SESSION['admin_id'])) {
+        admin_redirect('Önce admin girişi yapın.', 'error');
+    }
+    admin_require_csrf();
+    admin_require_capability('finance');
+    $firmaId = (int)($_POST['firma_id'] ?? 0);
+    $paket = trim($_POST['paket'] ?? '');
+    $tutar = (float)str_replace(',', '.', (string)($_POST['tutar'] ?? '0'));
+    $paraBirimi = strtoupper(trim($_POST['para_birimi'] ?? 'TRY')) ?: 'TRY';
+    $odemeYontemi = trim($_POST['odeme_yontemi'] ?? '');
+    $donemBaslangic = trim($_POST['donem_baslangic'] ?? '');
+    $donemBitis = trim($_POST['donem_bitis'] ?? '');
+    $notlar = trim($_POST['notlar'] ?? '');
+
+    if ($firmaId <= 0 || $tutar <= 0) {
+        admin_redirect('Ödeme kaydı için firma ve tutar zorunlu.', 'error');
+    }
+    foreach ([$donemBaslangic, $donemBitis] as $dateValue) {
+        if ($dateValue !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateValue)) {
+            admin_redirect('Dönem tarihleri geçersiz.', 'error');
+        }
+    }
+
+    $firma = $db->fetchOne("SELECT id, paket FROM kullanicilar WHERE id=? AND deleted_at IS NULL", [$firmaId]);
+    if (!$firma) {
+        admin_redirect('Ödeme eklenecek firma bulunamadı.', 'error');
+    }
+    if ($paket === '') {
+        $paket = $firma['paket'] ?: 'ucretsiz';
+    }
+
+    $db->execute(
+        "INSERT INTO subscription_payments (firma_id, admin_id, paket, tutar, para_birimi, odeme_yontemi, donem_baslangic, donem_bitis, notlar)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [$firmaId, (int)$_SESSION['admin_id'], $paket, $tutar, $paraBirimi, $odemeYontemi, $donemBaslangic ?: null, $donemBitis ?: null, $notlar]
+    );
+    if ($donemBitis !== '') {
+        $db->query(
+            "UPDATE kullanicilar SET paket=?, abonelik_bitis=?, aktif=1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            [$paket, $donemBitis, $firmaId]
+        );
+    }
+    admin_log($db, 'subscription_payment_added', admin_money($tutar) . " {$paraBirimi} abonelik ödemesi eklendi.", $firmaId);
+    header('Location: admin.php?firma_id=' . $firmaId);
+    exit;
 }
 
 if ($action === 'revoke_device' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -133,6 +364,7 @@ if ($action === 'revoke_device' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         "UPDATE sync_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE id=? AND firma_id=?",
         [$tokenId, $firmaId]
     );
+    admin_log($db, 'device_revoked', "Cihaz token #{$tokenId} iptal edildi.", $firmaId);
     header('Location: admin.php?firma_id=' . $firmaId);
     exit;
 }
@@ -159,6 +391,7 @@ if ($action === 'support_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['admin_support_firma_id'] = (int)$firma['id'];
     $_SESSION['admin_support_firma_adi'] = $firma['firma_adi'];
     $_SESSION['admin_support_started_at'] = date('Y-m-d H:i:s');
+    admin_log($db, 'support_login', 'Admin destek modu ile firma paneline girdi.', (int)$firma['id']);
 
     header('Location: index.php');
     exit;
@@ -196,6 +429,7 @@ if ($action === 'update_customer' && $_SERVER['REQUEST_METHOD'] === 'POST') {
          WHERE id=? AND firma_id=?",
         [$ad, $soyad, $telefon, $email, $adres, $notlar, $musteriId, $firmaId]
     );
+    admin_log($db, 'customer_updated', "Müşteri #{$musteriId} güncellendi.", $firmaId);
     header('Location: admin.php?firma_id=' . $firmaId . '&musteri_id=' . $musteriId);
     exit;
 }
@@ -228,6 +462,7 @@ if ($action === 'add_support_note' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         "INSERT INTO admin_support_notes (admin_id, firma_id, musteri_id, note) VALUES (?, ?, ?, ?)",
         [(int)$_SESSION['admin_id'], $firmaId, $musteriParam, $note]
     );
+    admin_log($db, 'support_note_added', $musteriParam ? "Müşteri #{$musteriParam} için destek notu eklendi." : 'Firma destek notu eklendi.', $firmaId);
     header('Location: admin.php?firma_id=' . $firmaId . ($musteriParam ? '&musteri_id=' . $musteriParam : ''));
     exit;
 }
@@ -254,6 +489,7 @@ if ($action === 'reply_chat' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         "UPDATE support_conversations SET durum='yanitlandi', last_message_at=CURRENT_TIMESTAMP WHERE id=?",
         [$conversationId]
     );
+    admin_log($db, 'chat_replied', "Sohbet #{$conversationId} yanıtlandı.");
     header('Location: admin.php?chat_id=' . $conversationId . '#chat');
     exit;
 }
@@ -271,12 +507,15 @@ if ($action === 'close_chat' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         "UPDATE support_conversations SET durum='kapali', closed_at=CURRENT_TIMESTAMP WHERE id=?",
         [$conversationId]
     );
+    admin_log($db, 'chat_closed', "Sohbet #{$conversationId} kapatıldı.");
     header('Location: admin.php?chat_id=' . $conversationId . '#chat');
     exit;
 }
 
 $flash = $_SESSION['admin_flash'] ?? null;
 unset($_SESSION['admin_flash']);
+$generatedResetLink = $_SESSION['admin_reset_link'] ?? '';
+unset($_SESSION['admin_reset_link']);
 
 $isLogged = !empty($_SESSION['admin_id']);
 $users = [];
@@ -292,6 +531,7 @@ $firmCustomers = [];
 $firmSummary = [];
 $firmDevices = [];
 $firmRecentActivity = [];
+$firmSubscriptionPayments = [];
 $supportNotes = [];
 $customerDetail = false;
 $customerServices = [];
@@ -300,8 +540,27 @@ $customerCollections = [];
 $customerInstallments = [];
 $customerDevices = [];
 $chatConversations = [];
+$passwordResetRequests = [];
+$adminUsers = [];
 $selectedChat = false;
 $selectedChatMessages = [];
+$adminMetrics = [
+    'open_chats' => 0,
+    'unread_chat_messages' => 0,
+    'pending_password_resets' => 0,
+    'expiring_subscriptions' => 0,
+    'monthly_collections' => 0,
+    'monthly_signups' => 0,
+    'connected_devices' => 0,
+    'overdue_accounts' => 0,
+];
+$recentAdminLogs = [];
+$systemHealth = [
+    'db_size_mb' => 0,
+    'last_sync_at' => '',
+    'revoked_devices' => 0,
+    'remember_tokens' => 0,
+];
 $stats = [
     'toplam' => 0,
     'aktif' => 0,
@@ -348,6 +607,57 @@ if ($isLogged) {
         $plan = $u['paket'] ?: 'ucretsiz';
         if (isset($stats[$plan])) $stats[$plan]++;
     }
+
+    $adminMetrics = [
+        'open_chats' => (int)$db->fetchColumn("SELECT COUNT(*) FROM support_conversations WHERE durum!='kapali'"),
+        'unread_chat_messages' => (int)$db->fetchColumn("SELECT COUNT(*) FROM support_messages WHERE sender_type='visitor' AND read_at IS NULL"),
+        'pending_password_resets' => (int)$db->fetchColumn("SELECT COUNT(*) FROM password_reset_requests WHERE durum='bekliyor'"),
+        'expiring_subscriptions' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND aktif=1 AND abonelik_bitis IS NOT NULL AND abonelik_bitis BETWEEN date('now') AND date('now', '+14 days')"),
+        'monthly_collections' => (float)$db->fetchColumn("SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE deleted_at IS NULL AND tahsilat_tarihi BETWEEN date('now','start of month') AND date('now','start of month','+1 month','-1 day')"),
+        'monthly_signups' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND created_at >= datetime('now','start of month')"),
+        'connected_devices' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE revoked_at IS NULL"),
+        'overdue_accounts' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND aktif=1 AND paket IN ('standart','premium') AND abonelik_bitis IS NOT NULL AND abonelik_bitis < date('now')"),
+    ];
+
+    $recentAdminLogs = $db->fetchAll("
+        SELECT l.*, a.ad_soyad AS admin_adi, k.firma_adi
+        FROM admin_activity_logs l
+        LEFT JOIN admin_users a ON a.id=l.admin_id
+        LEFT JOIN kullanicilar k ON k.id=l.firma_id
+        ORDER BY l.created_at DESC
+        LIMIT 12
+    ");
+
+    $adminUsers = $db->fetchAll("
+        SELECT id, ad_soyad, email, role, aktif, created_at, last_login_at
+        FROM admin_users
+        ORDER BY created_at DESC
+    ");
+
+    $dbFile = __DIR__ . '/database/musteri-takip.db';
+    $systemHealth = [
+        'db_size_mb' => is_file($dbFile) ? round(filesize($dbFile) / 1024 / 1024, 2) : 0,
+        'last_sync_at' => (string)$db->fetchColumn("SELECT MAX(last_seen_at) FROM sync_tokens WHERE revoked_at IS NULL"),
+        'revoked_devices' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE revoked_at IS NOT NULL"),
+        'remember_tokens' => (int)$db->fetchColumn("SELECT COUNT(*) FROM remember_tokens WHERE revoked_at IS NULL AND expires_at >= datetime('now')"),
+    ];
+
+    $passwordResetRequests = $db->fetchAll("
+        SELECT pr.*, k.firma_adi, k.ad_soyad, k.telefon, au.ad_soyad AS admin_adi
+        FROM password_reset_requests pr
+        LEFT JOIN kullanicilar k ON k.id=pr.firma_id
+        LEFT JOIN admin_users au ON au.id=pr.admin_id
+        WHERE pr.durum IN ('bekliyor', 'link_gonderildi')
+           OR (pr.created_at >= datetime('now', '-7 days'))
+        ORDER BY
+            CASE pr.durum
+                WHEN 'bekliyor' THEN 0
+                WHEN 'link_gonderildi' THEN 1
+                ELSE 2
+            END,
+            pr.created_at DESC
+        LIMIT 30
+    ");
 
     $chatConversations = $db->fetchAll("
         SELECT c.*,
@@ -437,6 +747,15 @@ if ($isLogged) {
                 ORDER BY tarih DESC
                 LIMIT 12
             ", [$selectedFirmaId, $selectedFirmaId, $selectedFirmaId]);
+
+            $firmSubscriptionPayments = $db->fetchAll("
+                SELECT sp.*, au.ad_soyad AS admin_adi
+                FROM subscription_payments sp
+                LEFT JOIN admin_users au ON au.id=sp.admin_id
+                WHERE sp.firma_id=?
+                ORDER BY sp.created_at DESC
+                LIMIT 20
+            ", [$selectedFirmaId]);
 
             $supportNotes = $db->fetchAll("
                 SELECT n.id, n.note, n.created_at, a.ad_soyad AS admin_adi, m.ad, m.soyad
@@ -573,7 +892,7 @@ if ($isLogged) {
                 <h1 class="text-xl font-bold">Admin Paneli</h1>
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-sm text-slate-500"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></span>
+                <span class="text-sm text-slate-500"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?> · <?= htmlspecialchars(admin_role()) ?></span>
                 <a href="admin.php?action=logout" class="text-sm font-semibold text-red-600 hover:text-red-700">
                     Çıkış
                 </a>
@@ -588,13 +907,33 @@ if ($isLogged) {
             </div>
         <?php endif; ?>
 
-        <section class="grid md:grid-cols-5 gap-4 mb-8">
+        <?php if ($generatedResetLink): ?>
+            <div class="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-blue-900">Şifre sıfırlama linki hazır</div>
+                        <input id="resetLinkInput" readonly value="<?= htmlspecialchars($generatedResetLink) ?>"
+                               class="mt-2 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700">
+                        <p class="text-xs text-blue-700 mt-1">Bu link 24 saat geçerlidir ve tek kullanımlıktır.</p>
+                    </div>
+                    <button type="button" onclick="navigator.clipboard?.writeText(document.getElementById('resetLinkInput').value)"
+                            class="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-semibold">
+                        Linki Kopyala
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <section class="grid md:grid-cols-4 xl:grid-cols-8 gap-4 mb-8">
             <?php foreach ([
                 ['Toplam Firma', $stats['toplam'], 'fa-building'],
                 ['Aktif', $stats['aktif'], 'fa-circle-check'],
-                ['Ücretsiz', $stats['ucretsiz'], 'fa-gift'],
-                ['Standart', $stats['standart'], 'fa-layer-group'],
-                ['Premium', $stats['premium'], 'fa-crown'],
+                ['Açık Sohbet', $adminMetrics['open_chats'], 'fa-comments'],
+                ['Okunmamış', $adminMetrics['unread_chat_messages'], 'fa-bell'],
+                ['Şifre Talebi', $adminMetrics['pending_password_resets'], 'fa-key'],
+                ['Biten Abonelik', $adminMetrics['expiring_subscriptions'], 'fa-hourglass-half'],
+                ['Bağlı Cihaz', $adminMetrics['connected_devices'], 'fa-mobile-screen-button'],
+                ['Bu Ay Kayıt', $adminMetrics['monthly_signups'], 'fa-user-plus'],
             ] as [$label, $value, $icon]): ?>
                 <div class="bg-white border border-slate-200 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-3">
@@ -606,8 +945,58 @@ if ($isLogged) {
             <?php endforeach; ?>
         </section>
 
+        <section class="grid lg:grid-cols-[1.1fr_.9fr] gap-4 mb-8">
+            <div class="bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
+                <div class="text-xs uppercase tracking-wide text-blue-200 font-bold mb-2">Yönetim Özeti</div>
+                <h2 class="text-2xl font-extrabold mb-4">Bu ay <?= admin_money($adminMetrics['monthly_collections']) ?> tahsilat görünüyor.</h2>
+                <div class="grid sm:grid-cols-4 gap-3 text-sm">
+                    <div class="rounded-xl bg-white/10 p-3">
+                        <div class="text-blue-100">Ücretsiz</div>
+                        <div class="text-xl font-bold"><?= (int)$stats['ucretsiz'] ?></div>
+                    </div>
+                    <div class="rounded-xl bg-white/10 p-3">
+                        <div class="text-blue-100">Standart</div>
+                        <div class="text-xl font-bold"><?= (int)$stats['standart'] ?></div>
+                    </div>
+                    <div class="rounded-xl bg-white/10 p-3">
+                        <div class="text-blue-100">Premium</div>
+                        <div class="text-xl font-bold"><?= (int)$stats['premium'] ?></div>
+                    </div>
+                    <div class="rounded-xl bg-white/10 p-3">
+                        <div class="text-blue-100">Lokal</div>
+                        <div class="text-xl font-bold"><?= (int)$stats['lokal'] ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-bold">Dikkat Gerektirenler</h2>
+                    <i class="fas fa-triangle-exclamation text-amber-500"></i>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <a href="#chat" class="flex items-center justify-between rounded-xl border border-slate-100 hover:border-blue-200 px-4 py-3">
+                        <span>Açık destek konuşmaları</span>
+                        <strong><?= (int)$adminMetrics['open_chats'] ?></strong>
+                    </a>
+                    <a href="#password-resets" class="flex items-center justify-between rounded-xl border border-slate-100 hover:border-blue-200 px-4 py-3">
+                        <span>Bekleyen şifre talepleri</span>
+                        <strong><?= (int)$adminMetrics['pending_password_resets'] ?></strong>
+                    </a>
+                    <div class="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+                        <span>14 gün içinde bitecek abonelik</span>
+                        <strong><?= (int)$adminMetrics['expiring_subscriptions'] ?></strong>
+                    </div>
+                    <div class="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+                        <span>Süresi geçmiş ücretli hesap</span>
+                        <strong class="text-red-600"><?= (int)$adminMetrics['overdue_accounts'] ?></strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="bg-white border border-slate-200 rounded-2xl p-4 mb-8">
-            <form method="get" class="grid md:grid-cols-[1fr_180px_160px_auto] gap-3 items-end">
+            <form method="get" class="grid md:grid-cols-[1fr_180px_160px_auto_auto] gap-3 items-end">
                 <label class="block">
                     <span class="text-xs font-semibold text-slate-500">Firma / yetkili / e-posta ara</span>
                     <input name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Örn. firma adı, mail, telefon"
@@ -633,7 +1022,89 @@ if ($isLogged) {
                 <button class="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-5 py-2.5 font-semibold text-sm">
                     Filtrele
                 </button>
+                <a href="admin.php?action=export_users"
+                   class="bg-white border border-slate-300 hover:border-blue-400 text-slate-700 rounded-xl px-5 py-2.5 font-semibold text-sm text-center">
+                    CSV
+                </a>
             </form>
+        </section>
+
+        <section id="password-resets" class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                    <h2 class="font-bold">Şifre Sıfırlama Talepleri</h2>
+                    <p class="text-xs text-slate-500 mt-1">Kullanıcıların “Şifremi unuttum” talepleri ve admin tarafından oluşturulan linkler.</p>
+                </div>
+                <span class="text-xs text-slate-400"><?= count($passwordResetRequests) ?> kayıt</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-500">
+                        <tr>
+                            <th class="text-left px-5 py-3">Hesap</th>
+                            <th class="text-left px-5 py-3">Talep</th>
+                            <th class="text-left px-5 py-3">Durum</th>
+                            <th class="text-left px-5 py-3">Link</th>
+                            <th class="text-right px-5 py-3">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                    <?php foreach ($passwordResetRequests as $r): ?>
+                        <?php
+                            $statusClass = $r['durum'] === 'bekliyor'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : ($r['durum'] === 'kullanildi' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200');
+                            $canCreate = !empty($r['firma_id']) && $r['durum'] !== 'kullanildi';
+                        ?>
+                        <tr>
+                            <td class="px-5 py-4">
+                                <div class="font-semibold"><?= htmlspecialchars($r['firma_adi'] ?: 'Eşleşmeyen e-posta') ?></div>
+                                <div class="text-xs text-slate-400"><?= htmlspecialchars($r['email']) ?></div>
+                                <?php if (!empty($r['telefon'])): ?><div class="text-xs text-slate-400"><?= htmlspecialchars($r['telefon']) ?></div><?php endif; ?>
+                            </td>
+                            <td class="px-5 py-4">
+                                <div><?= htmlspecialchars($r['created_at']) ?></div>
+                                <div class="text-xs text-slate-400">IP: <?= htmlspecialchars($r['requested_ip'] ?: '-') ?></div>
+                            </td>
+                            <td class="px-5 py-4">
+                                <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-bold <?= $statusClass ?>">
+                                    <?= htmlspecialchars($r['durum']) ?>
+                                </span>
+                                <?php if (!empty($r['admin_adi'])): ?>
+                                    <div class="text-xs text-slate-400 mt-1"><?= htmlspecialchars($r['admin_adi']) ?></div>
+                                <?php endif; ?>
+                            </td>
+                            <td class="px-5 py-4 text-xs text-slate-500">
+                                <?php if (!empty($r['expires_at'])): ?>
+                                    Geçerlilik: <?= htmlspecialchars($r['expires_at']) ?>
+                                    <?php if (!empty($r['used_at'])): ?><br>Kullanım: <?= htmlspecialchars($r['used_at']) ?><?php endif; ?>
+                                <?php else: ?>
+                                    Henüz link oluşturulmadı
+                                <?php endif; ?>
+                            </td>
+                            <td class="px-5 py-4 text-right">
+                                <?php if ($canCreate): ?>
+                                    <form method="post" class="inline-block">
+                                        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
+                                        <input type="hidden" name="action" value="create_reset_link">
+                                        <input type="hidden" name="firma_id" value="<?= (int)$r['firma_id'] ?>">
+                                        <input type="hidden" name="request_id" value="<?= (int)$r['id'] ?>">
+                                        <button class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 font-semibold">
+                                            Link Oluştur
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="text-xs text-slate-400">Kullanıcı bulunamadı</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$passwordResetRequests): ?>
+                        <tr><td colspan="5" class="px-5 py-10 text-center text-slate-400">Henüz şifre talebi yok.</td></tr>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section id="chat" class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
@@ -782,6 +1253,83 @@ if ($isLogged) {
                     <div class="text-xs text-slate-500 mb-1">Paket / Durum</div>
                     <div class="text-xl font-extrabold"><?= admin_plan_label($selectedFirma['paket'] ?: 'ucretsiz') ?> · <?= (int)$selectedFirma['aktif'] ? 'Aktif' : 'Pasif' ?></div>
                     <div class="text-xs text-slate-500 mt-1">Bitiş: <?= htmlspecialchars($selectedFirma['abonelik_bitis'] ?: 'Belirtilmemiş') ?></div>
+                </div>
+            </div>
+
+            <div class="grid lg:grid-cols-[.9fr_1.1fr] gap-4 p-5 border-b border-slate-100">
+                <div class="rounded-xl border border-slate-200 p-4">
+                    <div class="font-bold text-sm mb-3">Abonelik Ödemesi Ekle</div>
+                    <form method="post" class="grid sm:grid-cols-2 gap-3">
+                        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
+                        <input type="hidden" name="action" value="add_subscription_payment">
+                        <input type="hidden" name="firma_id" value="<?= (int)$selectedFirma['id'] ?>">
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Paket</span>
+                            <select name="paket" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                <?php foreach (['ucretsiz', 'standart', 'premium', 'lokal'] as $p): ?>
+                                    <option value="<?= $p ?>" <?= ($selectedFirma['paket'] ?: 'ucretsiz') === $p ? 'selected' : '' ?>><?= admin_plan_label($p) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Tutar</span>
+                            <input name="tutar" type="number" step="0.01" min="0" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </label>
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Para Birimi</span>
+                            <select name="para_birimi" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                <option value="TRY">TRY</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Yöntem</span>
+                            <input name="odeme_yontemi" placeholder="Kart, havale..." class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </label>
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Dönem Başlangıç</span>
+                            <input name="donem_baslangic" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </label>
+                        <label class="block">
+                            <span class="text-xs font-semibold text-slate-500">Dönem Bitiş</span>
+                            <input name="donem_bitis" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </label>
+                        <label class="block sm:col-span-2">
+                            <span class="text-xs font-semibold text-slate-500">Not</span>
+                            <textarea name="notlar" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+                        </label>
+                        <div class="sm:col-span-2 text-right">
+                            <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                                Ödemeyi Kaydet
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-50 font-bold text-sm">Abonelik Ödeme Geçmişi</div>
+                    <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                        <?php foreach ($firmSubscriptionPayments as $p): ?>
+                            <div class="px-4 py-3 text-sm flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold"><?= htmlspecialchars(admin_plan_label($p['paket'] ?: 'ucretsiz')) ?> · <?= htmlspecialchars(number_format((float)$p['tutar'], 2, ',', '.')) ?> <?= htmlspecialchars($p['para_birimi'] ?: 'TRY') ?></div>
+                                    <div class="text-xs text-slate-500">
+                                        <?= htmlspecialchars($p['donem_baslangic'] ?: '-') ?> / <?= htmlspecialchars($p['donem_bitis'] ?: '-') ?>
+                                        · <?= htmlspecialchars($p['odeme_yontemi'] ?: 'Yöntem yok') ?>
+                                    </div>
+                                    <?php if (!empty($p['notlar'])): ?><div class="text-xs text-slate-400 mt-1"><?= htmlspecialchars($p['notlar']) ?></div><?php endif; ?>
+                                </div>
+                                <div class="text-right text-xs text-slate-400">
+                                    <?= htmlspecialchars($p['created_at']) ?><br>
+                                    <?= htmlspecialchars($p['admin_adi'] ?: 'Admin') ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (!$firmSubscriptionPayments): ?>
+                            <div class="px-4 py-8 text-center text-slate-400 text-sm">Henüz abonelik ödemesi yok.</div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
@@ -1045,6 +1593,120 @@ if ($isLogged) {
             </div>
         <?php endif; ?>
 
+        <section class="grid md:grid-cols-4 gap-4 mb-8">
+            <?php foreach ([
+                ['Veritabanı', $systemHealth['db_size_mb'] . ' MB', 'fa-database'],
+                ['Son Senkron', $systemHealth['last_sync_at'] ?: 'Yok', 'fa-rotate'],
+                ['İptal Cihaz', $systemHealth['revoked_devices'], 'fa-ban'],
+                ['Hatırlanan Oturum', $systemHealth['remember_tokens'], 'fa-cookie-bite'],
+            ] as [$label, $value, $icon]): ?>
+                <div class="bg-white border border-slate-200 rounded-2xl p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-slate-500"><?= htmlspecialchars($label) ?></span>
+                        <i class="fas <?= htmlspecialchars($icon) ?> text-slate-400"></i>
+                    </div>
+                    <div class="font-extrabold text-slate-800 truncate"><?= htmlspecialchars((string)$value) ?></div>
+                </div>
+            <?php endforeach; ?>
+        </section>
+
+        <?php if (admin_can('super_admin')): ?>
+        <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-slate-200">
+                <h2 class="font-bold">Admin Ekibi ve Yetkiler</h2>
+                <p class="text-xs text-slate-500 mt-1">Destek, finans ve görüntüleme rollerini buradan yönetin.</p>
+            </div>
+            <div class="grid lg:grid-cols-[.9fr_1.1fr] gap-0">
+                <form method="post" class="p-5 border-r border-slate-100 grid sm:grid-cols-2 gap-3">
+                    <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
+                    <input type="hidden" name="action" value="create_admin_user">
+                    <label class="block sm:col-span-2">
+                        <span class="text-xs font-semibold text-slate-500">Ad Soyad</span>
+                        <input name="ad_soyad" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </label>
+                    <label class="block sm:col-span-2">
+                        <span class="text-xs font-semibold text-slate-500">E-posta</span>
+                        <input name="email" type="email" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </label>
+                    <label class="block">
+                        <span class="text-xs font-semibold text-slate-500">Şifre</span>
+                        <input name="sifre" type="password" minlength="8" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </label>
+                    <label class="block">
+                        <span class="text-xs font-semibold text-slate-500">Rol</span>
+                        <select name="role" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <option value="support">Destek</option>
+                            <option value="finance">Finans</option>
+                            <option value="viewer">Sadece Görüntüleme</option>
+                            <option value="super_admin">Süper Admin</option>
+                        </select>
+                    </label>
+                    <div class="sm:col-span-2 text-right">
+                        <button class="bg-slate-900 hover:bg-slate-800 text-white rounded-lg px-4 py-2 text-sm font-semibold">Admin Ekle</button>
+                    </div>
+                </form>
+                <div class="divide-y divide-slate-100">
+                    <?php foreach ($adminUsers as $au): ?>
+                        <form method="post" class="px-5 py-4 flex flex-col md:flex-row md:items-center gap-3">
+                            <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
+                            <input type="hidden" name="action" value="update_admin_user">
+                            <input type="hidden" name="admin_user_id" value="<?= (int)$au['id'] ?>">
+                            <div class="flex-1">
+                                <div class="font-semibold"><?= htmlspecialchars($au['ad_soyad']) ?></div>
+                                <div class="text-xs text-slate-400"><?= htmlspecialchars($au['email']) ?> · Son giriş: <?= htmlspecialchars($au['last_login_at'] ?: '-') ?></div>
+                            </div>
+                            <select name="role" class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+                                <?php foreach (['super_admin' => 'Süper Admin', 'support' => 'Destek', 'finance' => 'Finans', 'viewer' => 'Görüntüleme'] as $role => $label): ?>
+                                    <option value="<?= $role ?>" <?= ($au['role'] ?: 'super_admin') === $role ? 'selected' : '' ?>><?= $label ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label class="inline-flex items-center gap-2 text-sm">
+                                <input type="checkbox" name="aktif" value="1" <?= (int)$au['aktif'] ? 'checked' : '' ?>>
+                                Aktif
+                            </label>
+                            <button class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm font-semibold">Kaydet</button>
+                        </form>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
+
+        <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                    <h2 class="font-bold">Admin İşlem Geçmişi</h2>
+                    <p class="text-xs text-slate-500 mt-1">Paket, destek, şifre, cihaz ve sohbet işlemlerinin son kayıtları.</p>
+                </div>
+                <span class="text-xs text-slate-400"><?= count($recentAdminLogs) ?> hareket</span>
+            </div>
+            <div class="divide-y divide-slate-100">
+                <?php foreach ($recentAdminLogs as $log): ?>
+                    <div class="px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-sm">
+                        <div>
+                            <div class="font-semibold text-slate-800">
+                                <?= htmlspecialchars($log['description'] ?: $log['action']) ?>
+                            </div>
+                            <div class="text-xs text-slate-400 mt-1">
+                                <?= htmlspecialchars($log['admin_adi'] ?: 'Admin') ?>
+                                <?php if (!empty($log['firma_adi'])): ?>
+                                    · <?= htmlspecialchars($log['firma_adi']) ?>
+                                <?php endif; ?>
+                                · <?= htmlspecialchars($log['ip_address'] ?: '-') ?>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="rounded-full bg-slate-100 text-slate-600 px-2.5 py-1 text-xs font-bold"><?= htmlspecialchars($log['action']) ?></span>
+                            <span class="text-xs text-slate-400 whitespace-nowrap"><?= htmlspecialchars($log['created_at']) ?></span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <?php if (!$recentAdminLogs): ?>
+                    <div class="px-5 py-10 text-center text-slate-400 text-sm">Henüz admin hareketi yok.</div>
+                <?php endif; ?>
+            </div>
+        </section>
+
         <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
                 <h2 class="font-bold">Kullanıcılar / Firmalar</h2>
@@ -1080,6 +1742,7 @@ if ($isLogged) {
                                     <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['admin_csrf']) ?>">
                                     <input type="hidden" name="action" value="update_user">
                                     <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                    <input type="hidden" name="firma_id" value="<?= (int)$u['id'] ?>">
                                     <select name="paket" class="rounded-lg border border-slate-300 px-2 py-1">
                                         <?php foreach (['ucretsiz', 'standart', 'premium', 'lokal'] as $p): ?>
                                             <option value="<?= $p ?>" <?= ($u['paket'] ?: 'ucretsiz') === $p ? 'selected' : '' ?>>
@@ -1115,6 +1778,11 @@ if ($isLogged) {
                                        class="inline-flex items-center justify-center border border-slate-300 hover:border-blue-400 text-slate-700 rounded-lg px-3 py-1.5 font-semibold mr-2">
                                         Detay
                                     </a>
+                                    <button name="action" value="create_reset_link"
+                                            class="border border-amber-300 hover:border-amber-500 text-amber-700 rounded-lg px-3 py-1.5 font-semibold mr-2"
+                                            onclick="return confirm('Bu kullanıcı için şifre sıfırlama linki oluşturulsun mu?')">
+                                        Şifre Linki
+                                    </button>
                                     <button class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 font-semibold">
                                         Kaydet
                                     </button>

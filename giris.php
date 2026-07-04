@@ -89,7 +89,7 @@ if (isset($_SESSION['firma_id'])) {
                         <input type="checkbox" id="beniHatirla" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked>
                         Beni hatırla
                     </span>
-                    <span class="text-xs text-slate-400">30 gün açık kalsın</span>
+                    <a href="sifremi-unuttum.php" class="text-xs font-semibold text-blue-600 hover:underline">Şifremi unuttum</a>
                 </label>
 
                 <button type="submit" id="submitBtn"
