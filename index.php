@@ -48,7 +48,7 @@ if (isset($_SESSION['firma_id']) && empty($_SESSION['admin_support_mode'])) {
 
 $page = isset($_GET['page']) ? preg_replace('/[^a-z_]/', '', trim($_GET['page'])) : 'dashboard';
 
-$validPages = ['dashboard', 'musteriler', 'servisler', 'stok', 'bakimlar', 'raporlar', 'ayarlar', 'satislar', 'tahsilatlar'];
+$validPages = ['dashboard', 'musteriler', 'servisler', 'stok', 'tedarikciler', 'bakimlar', 'raporlar', 'ayarlar', 'satislar', 'tahsilatlar'];
 if (!in_array($page, $validPages, true)) {
     $page = 'dashboard';
 }

@@ -290,24 +290,17 @@ class Satis extends Model {
 
         $taksitliMaliyet = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(
-                CASE WHEN taksit_sayisi > 0 THEN toplam_maliyet * donem_taksit_adet / taksit_sayisi ELSE 0 END
+                CASE WHEN toplam_tutar > 0 THEN toplam_maliyet * donem_ciro / toplam_tutar ELSE 0 END
              ),0)
              FROM (
-                SELECT s.id,
+                SELECT s.id, s.toplam_tutar,
                        CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END AS toplam_maliyet,
                        (
-                           SELECT COUNT(*)
+                           SELECT COALESCE(SUM(t.tutar),0)
                            FROM taksitler t
                            WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
-                             AND t.taksit_no > 0
                              AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
-                       ) AS donem_taksit_adet,
-                       (
-                           SELECT COUNT(*)
-                           FROM taksitler t
-                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
-                             AND t.taksit_no > 0
-                       ) AS taksit_sayisi
+                       ) AS donem_ciro
                 FROM satislar s
                 LEFT JOIN (
                     SELECT sk.satis_id,

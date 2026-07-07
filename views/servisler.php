@@ -252,7 +252,7 @@ include __DIR__ . '/layout/header.php';
                                            placeholder="Manuel işlem adı"
                                            x-model="islem.manuel_islem">
                                 </div>
-                                <input type="number" class="form-input" placeholder="Tutar (₺)" step="0.01" min="0"
+                                <input type="number" class="form-input" placeholder="Tutar (₺)" step="100" min="0"
                                        x-model="islem.tutar" @input="calcTotal()">
                                 <button type="button" class="btn btn-danger btn-icon" @click="form.islemler.splice(i,1); calcTotal()">
                                     <i class="fas fa-times text-xs"></i>
@@ -301,7 +301,7 @@ include __DIR__ . '/layout/header.php';
                                         </select>
                                         <input type="number" class="form-input w-20 text-center" placeholder="Adet" min="1"
                                                x-model="p.miktar" @input="calcTotal()">
-                                        <input type="number" class="form-input w-28" placeholder="Fiyat (₺)" step="0.01"
+                                        <input type="number" class="form-input w-28" placeholder="Fiyat (₺)" step="100"
                                                x-model="p.birim_fiyat" @input="calcTotal()">
                                     </div>
                                 </template>
@@ -343,7 +343,7 @@ include __DIR__ . '/layout/header.php';
                     <div x-show="form.tahsilat_al" x-transition class="grid grid-cols-3 gap-4 mt-4">
                         <div>
                             <label class="form-label">Tahsilat Tutarı</label>
-                            <input type="number" class="form-input" step="0.01"
+                            <input type="number" class="form-input" step="100"
                                    x-model="form.tahsilat_tutar">
                         </div>
                         <div>
@@ -361,6 +361,31 @@ include __DIR__ . '/layout/header.php';
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <div x-show="editId" class="border border-emerald-100 bg-emerald-50 rounded-xl p-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="font-semibold text-slate-800 text-sm">Tahsilatlar</p>
+                            <p class="text-xs text-slate-500 mt-0.5">Bu servis için alınan ödemeleri buradan geri alabilir veya yeni tahsilat ekleyebilirsiniz.</p>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" @click="openTahsilatFromEdit()">
+                            <i class="fas fa-plus text-xs"></i> Tahsilat Ekle
+                        </button>
+                    </div>
+                    <div class="mt-3 space-y-2" x-show="form.tahsilatlar && form.tahsilatlar.length">
+                        <template x-for="th in (form.tahsilatlar || [])" :key="th.id">
+                            <div class="flex items-center justify-between gap-3 rounded-lg bg-white border border-emerald-100 px-3 py-2 text-sm">
+                                <div>
+                                    <span class="font-semibold text-emerald-700" x-text="formatCurrency(th.tutar)"></span>
+                                    <span class="text-slate-400 ml-2" x-text="formatOdemeYontemi(th.odeme_yontemi)"></span>
+                                    <span class="text-slate-400 ml-2" x-text="formatDate(th.tahsilat_tarihi)"></span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-danger py-0.5 px-2 text-xs" @click="deleteTahsilat(th.id)">Sil</button>
+                            </div>
+                        </template>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-3" x-show="!form.tahsilatlar || !form.tahsilatlar.length">Bu servis için kayıtlı tahsilat yok.</p>
                 </div>
 
                 <div class="modal-footer px-0 pb-0">
@@ -548,7 +573,7 @@ function servislerApp() {
         form: {
             musteri_id: '', servis_tipi: '', servis_tarihi: new Date().toISOString().split('T')[0],
             islemler: [], parcalar: [], notlar: '', toplam_tutar: 0, periyot_ay: 6,
-            tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
+            tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit', tahsilatlar: [],
         },
         varsayilanPeriyot: 6,
         varsayilanPeriyodikIslemId: '',
@@ -656,7 +681,7 @@ function servislerApp() {
                 musteri_id: '', servis_tipi: '', servis_tarihi: new Date().toISOString().split('T')[0],
                 islemler: [], parcalar: [], notlar: '', toplam_tutar: 0,
                 periyot_ay: this.varsayilanPeriyot,
-                tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
+                tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit', tahsilatlar: [],
             };
             this.musteriSearch = '';
             this.selectedMusteriName = '';
@@ -677,6 +702,7 @@ function servislerApp() {
                     notlar: d.notlar || '',
                     toplam_tutar: d.toplam_tutar || 0,
                     tahsilat_al: false, tahsilat_tutar: 0, odeme_yontemi: 'nakit',
+                    tahsilatlar: d.tahsilatlar || [],
                 };
                 this.musteriSearch = `${d.ad} ${d.soyad}`;
                 this.selectedMusteriName = `${d.ad} ${d.soyad}`;
@@ -771,7 +797,7 @@ function servislerApp() {
             this.calcTotal();
             if (!this.editId && this.form.tahsilat_al) {
                 const tahsilatTutar = parseFloat(this.form.tahsilat_tutar || 0);
-                if (tahsilatTutar <= 0 || tahsilatTutar > parseFloat(this.form.toplam_tutar || 0)) {
+                if (tahsilatTutar < 0 || tahsilatTutar > parseFloat(this.form.toplam_tutar || 0)) {
                     showToast('Tahsilat tutarı servis toplamından büyük olamaz.', 'error');
                     return;
                 }
@@ -827,8 +853,26 @@ function servislerApp() {
             this.showTahsilat = true;
         },
 
+        openTahsilatFromEdit() {
+            if (!this.editId) return;
+            const odenen = (this.form.tahsilatlar || []).reduce((sum, th) => sum + (parseFloat(th.tutar) || 0), 0);
+            const kalan = Math.max(0, (parseFloat(this.form.toplam_tutar) || 0) - odenen);
+            this.tahsilatForm = {
+                musteri_id: this.form.musteri_id,
+                kaynak_id: this.editId,
+                kaynak_tip: 'servis',
+                musteriAdi: this.selectedMusteriName,
+                kalan,
+                tutar: kalan,
+                odeme_yontemi: 'nakit',
+                tahsilat_tarihi: this.form.servis_tarihi || new Date().toISOString().split('T')[0],
+                notlar: '',
+            };
+            this.showTahsilat = true;
+        },
+
         async saveTahsilat() {
-            if (!this.tahsilatForm.tutar || this.tahsilatForm.tutar <= 0) {
+            if (this.tahsilatForm.tutar === '' || parseFloat(this.tahsilatForm.tutar) < 0) {
                 showToast('Geçerli bir tutar girin.', 'error'); return;
             }
             this.saving = true;
@@ -836,8 +880,18 @@ function servislerApp() {
                 await api('api/tahsilatlar.php', { method: 'POST', body: this.tahsilatForm });
                 showToast('Tahsilat kaydedildi.', 'success');
                 this.showTahsilat = false;
+                if (this.editId && String(this.tahsilatForm.kaynak_id) === String(this.editId)) {
+                    await this.refreshEditedServis();
+                }
                 await this.loadServisler();
             } catch(e) {} finally { this.saving = false; }
+        },
+
+        async refreshEditedServis() {
+            if (!this.editId) return;
+            const d = await api(`api/servisler.php?id=${this.editId}`);
+            this.form.tahsilatlar = d.tahsilatlar || [];
+            this.form.toplam_tutar = d.toplam_tutar || this.form.toplam_tutar || 0;
         },
 
         async deleteTahsilat(id) {
@@ -847,6 +901,9 @@ function servislerApp() {
                 showToast('Tahsilat geri alındı.', 'success');
                 if (this.detail) {
                     this.detail = await api(`api/servisler.php?id=${this.detail.id}`);
+                }
+                if (this.editId) {
+                    await this.refreshEditedServis();
                 }
                 await this.loadServisler();
             } catch(e) {}

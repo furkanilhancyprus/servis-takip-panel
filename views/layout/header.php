@@ -449,6 +449,9 @@
             <a href="?page=stok" class="sidebar-link <?= ($activePage ?? '') === 'stok' ? 'active' : '' ?>">
                 <i class="fas fa-boxes-stacked icon"></i> Stok
             </a>
+            <a href="?page=tedarikciler" class="sidebar-link <?= ($activePage ?? '') === 'tedarikciler' ? 'active' : '' ?>">
+                <i class="fas fa-truck-ramp-box icon"></i> Tedarikçiler
+            </a>
             <a href="?page=raporlar" class="sidebar-link <?= ($activePage ?? '') === 'raporlar' ? 'active' : '' ?>">
                 <i class="fas fa-chart-column icon"></i> Raporlar
             </a>
@@ -508,6 +511,9 @@
         </a>
         <a href="?page=stok" class="<?= ($activePage ?? '') === 'stok' ? 'active' : '' ?>">
             <i class="fas fa-boxes-stacked"></i><span>Stok</span>
+        </a>
+        <a href="?page=tedarikciler" class="<?= ($activePage ?? '') === 'tedarikciler' ? 'active' : '' ?>">
+            <i class="fas fa-truck-ramp-box"></i><span>Tedarikçi</span>
         </a>
         <a href="?page=raporlar" class="<?= ($activePage ?? '') === 'raporlar' ? 'active' : '' ?>">
             <i class="fas fa-chart-column"></i><span>Rapor</span>

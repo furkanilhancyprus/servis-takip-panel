@@ -20,6 +20,9 @@ $tables = [
     'taksitler',
     'tahsilatlar',
     'musteri_cihazlari',
+    'tedarikci_alimlari',
+    'tedarikci_alim_kalemleri',
+    'tedarikci_odemeleri',
 ];
 
 $referenceMap = [
@@ -32,8 +35,10 @@ $referenceMap = [
     'satislar' => ['musteri_id' => 'musteriler', 'cihaz_id' => 'cihazlar'],
     'satis_kalemleri' => ['satis_id' => 'satislar', 'parca_id' => 'parcalar'],
     'taksitler' => ['satis_id' => 'satislar', 'musteri_id' => 'musteriler'],
-    'tahsilatlar' => ['musteri_id' => 'musteriler'],
+    'tahsilatlar' => ['musteri_id' => 'musteriler', 'taksit_id' => 'taksitler'],
     'musteri_cihazlari' => ['musteri_id' => 'musteriler', 'cihaz_id' => 'cihazlar', 'satis_id' => 'satislar'],
+    'tedarikci_alim_kalemleri' => ['alim_id' => 'tedarikci_alimlari', 'parca_id' => 'parcalar'],
+    'tedarikci_odemeleri' => ['alim_id' => 'tedarikci_alimlari'],
 ];
 
 function backup_columns(PDO $pdo, string $table): array {
@@ -65,6 +70,9 @@ function backup_rows(Database $db, PDO $pdo, string $table, int $firmaId): array
         $params[] = $firmaId;
     } elseif ($table === 'satis_kalemleri') {
         $where[] = 'satis_id IN (SELECT id FROM satislar WHERE firma_id=?)';
+        $params[] = $firmaId;
+    } elseif ($table === 'tedarikci_alim_kalemleri') {
+        $where[] = 'alim_id IN (SELECT id FROM tedarikci_alimlari WHERE firma_id=?)';
         $params[] = $firmaId;
     }
 

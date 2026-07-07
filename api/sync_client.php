@@ -63,6 +63,7 @@ function client_tables(): array {
         'servis_islemleri', 'parcalar', 'servis_parcalari', 'satislar',
         'satis_kalemleri', 'tahsilatlar', 'ayarlar', 'cihazlar',
         'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
+        'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
     ];
 }
 
@@ -126,8 +127,10 @@ function client_ref_map(): array {
         'servis_id' => 'servisler',
         'parca_id' => 'parcalar',
         'satis_id' => 'satislar',
+        'taksit_id' => 'taksitler',
         'cihaz_id' => 'cihazlar',
         'islem_id' => 'standart_islemler',
+        'alim_id' => 'tedarikci_alimlari',
     ];
 }
 

@@ -316,6 +316,44 @@ class Database {
                 FOREIGN KEY (musteri_id) REFERENCES musteriler(id)
             );
 
+            CREATE TABLE IF NOT EXISTS tedarikci_alimlari (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id          INTEGER NOT NULL DEFAULT 0,
+                tedarikci_adi     TEXT NOT NULL,
+                fatura_no         TEXT,
+                alim_tarihi       DATE DEFAULT (date('now')),
+                toplam_tutar      REAL DEFAULT 0,
+                odenen_tutar      REAL DEFAULT 0,
+                odeme_durumu      TEXT DEFAULT 'odenmedi',
+                notlar            TEXT,
+                created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS tedarikci_alim_kalemleri (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                alim_id           INTEGER NOT NULL,
+                parca_id          INTEGER NOT NULL,
+                miktar            INTEGER DEFAULT 1,
+                birim_fiyat       REAL DEFAULT 0,
+                FOREIGN KEY (alim_id) REFERENCES tedarikci_alimlari(id) ON DELETE CASCADE,
+                FOREIGN KEY (parca_id) REFERENCES parcalar(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS tedarikci_odemeleri (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id          INTEGER NOT NULL DEFAULT 0,
+                alim_id           INTEGER NOT NULL,
+                tutar             REAL DEFAULT 0,
+                odeme_yontemi     TEXT DEFAULT 'nakit',
+                odeme_tarihi      DATE DEFAULT (date('now')),
+                notlar            TEXT,
+                created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE,
+                FOREIGN KEY (alim_id) REFERENCES tedarikci_alimlari(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS ayarlar (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 firma_id    INTEGER NOT NULL DEFAULT 0,
@@ -423,6 +461,8 @@ class Database {
             ['servis_parcalari', 'usd_kur', "ALTER TABLE servis_parcalari ADD COLUMN usd_kur REAL DEFAULT 0"],
             ['satis_kalemleri', 'birim_maliyet_usd', "ALTER TABLE satis_kalemleri ADD COLUMN birim_maliyet_usd REAL DEFAULT 0"],
             ['satis_kalemleri', 'usd_kur', "ALTER TABLE satis_kalemleri ADD COLUMN usd_kur REAL DEFAULT 0"],
+            ['taksitler', 'odenen_tutar', "ALTER TABLE taksitler ADD COLUMN odenen_tutar REAL DEFAULT 0"],
+            ['tahsilatlar', 'taksit_id', "ALTER TABLE tahsilatlar ADD COLUMN taksit_id INTEGER"],
             ['musteriler', 'lat',      "ALTER TABLE musteriler ADD COLUMN lat REAL"],
             ['musteriler', 'lng',      "ALTER TABLE musteriler ADD COLUMN lng REAL"],
             ['cihazlar', 'parca_id', "ALTER TABLE cihazlar ADD COLUMN parca_id INTEGER"],
@@ -435,6 +475,7 @@ class Database {
             'servisler', 'servis_islemleri', 'parcalar', 'servis_parcalari',
             'satislar', 'satis_kalemleri', 'tahsilatlar', 'ayarlar',
             'cihazlar', 'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
+            'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
         ];
         foreach ($syncTables as $table) {
             $extraMigrations[] = [$table, 'uuid', "ALTER TABLE {$table} ADD COLUMN uuid TEXT"];
@@ -451,6 +492,27 @@ class Database {
                 $this->pdo->exec($sql);
             }
         }
+
+        $this->pdo->exec("
+            UPDATE taksitler
+            SET odenen_tutar=tutar
+            WHERE deleted_at IS NULL AND odendi=1 AND COALESCE(odenen_tutar,0)=0;
+
+            INSERT INTO tahsilatlar (firma_id, musteri_id, kaynak_tip, kaynak_id, taksit_id, tutar, odeme_yontemi, notlar, tahsilat_tarihi)
+            SELECT t.firma_id, t.musteri_id, 'satis', t.satis_id, t.id,
+                   COALESCE(NULLIF(t.odenen_tutar,0), t.tutar),
+                   COALESCE(t.odeme_yontemi, 'nakit'),
+                   'Eski taksit odemesi',
+                   COALESCE(t.odeme_tarihi, t.vade_tarihi, date('now'))
+            FROM taksitler t
+            WHERE t.deleted_at IS NULL
+              AND t.taksit_no > 0
+              AND t.odendi=1
+              AND NOT EXISTS (
+                  SELECT 1 FROM tahsilatlar th
+                  WHERE th.taksit_id=t.id AND th.deleted_at IS NULL
+              );
+        ");
 
         $this->pdo->exec("
             CREATE TABLE IF NOT EXISTS sync_queue (
@@ -657,6 +719,7 @@ class Database {
             'servisler', 'servis_islemleri', 'parcalar', 'servis_parcalari',
             'satislar', 'satis_kalemleri', 'tahsilatlar', 'ayarlar',
             'cihazlar', 'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
+            'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
         ];
 
         foreach ($tables as $table) {

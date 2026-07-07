@@ -36,16 +36,17 @@ switch (method()) {
             $sonuc = $tk->odemeYap(
                 (int)$data['taksit_id'],
                 $data['odeme_yontemi'] ?? 'nakit',
-                $data['odeme_tarihi']  ?? null
+                $data['odeme_tarihi']  ?? null,
+                isset($data['tutar']) ? (float)$data['tutar'] : null
             );
             if (!$sonuc) json_err('Taksit bulunamadı.');
             json_ok(null, 'Taksit ödendi.');
         }
         // Normal tahsilat
-        if (empty($data['musteri_id']) || empty($data['kaynak_tip']) || empty($data['kaynak_id']) || empty($data['tutar'])) {
+        if (empty($data['musteri_id']) || empty($data['kaynak_tip']) || empty($data['kaynak_id']) || !isset($data['tutar']) || $data['tutar'] === '') {
             json_err('Zorunlu alanlar eksik.');
         }
-        if ((float)$data['tutar'] <= 0) json_err('Tutar 0\'dan büyük olmalıdır.');
+        if ((float)$data['tutar'] < 0 || ($data['kaynak_tip'] !== 'servis' && (float)$data['tutar'] <= 0)) json_err('Geçerli bir tutar girin.');
         $newId = $t->create($data);
         json_ok(['id' => $newId], 'Tahsilat kaydedildi.');
 

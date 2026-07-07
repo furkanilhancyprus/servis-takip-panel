@@ -35,16 +35,16 @@ switch (method()) {
         if ((empty($data['musteri_id']) && empty($data['musteri_ids'])) || empty($data['servis_tipi'])) {
             json_err('Müşteri ve servis tipi zorunludur.');
         }
-        if (!empty($data['tahsilat']['tutar'])) {
+        if (isset($data['tahsilat']['tutar']) && $data['tahsilat']['tutar'] !== '') {
             $tahsilatTutar = (float)$data['tahsilat']['tutar'];
             $servisToplam = (float)($data['toplam_tutar'] ?? 0);
-            if ($tahsilatTutar <= 0 || $tahsilatTutar > $servisToplam) {
+            if ($tahsilatTutar < 0 || $tahsilatTutar > $servisToplam) {
                 json_err('Tahsilat tutarı servis toplamından büyük olamaz.');
             }
         }
         if (!empty($data['musteri_ids'])) {
             $newIds = $s->createMany($data['musteri_ids'], $data);
-            if (!empty($data['tahsilat']['tutar'])) {
+            if (isset($data['tahsilat']['tutar']) && $data['tahsilat']['tutar'] !== '') {
                 $tahsilat = new Tahsilat();
                 foreach ($newIds as $i => $servisId) {
                     $tahsilat->create([
@@ -62,7 +62,7 @@ switch (method()) {
         }
 
         $newId = $s->create($data);
-        if (!empty($data['tahsilat']['tutar'])) {
+        if (isset($data['tahsilat']['tutar']) && $data['tahsilat']['tutar'] !== '') {
             (new Tahsilat())->create([
                 'musteri_id' => $data['musteri_id'],
                 'kaynak_tip' => 'servis',

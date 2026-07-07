@@ -132,13 +132,16 @@ class Servis extends Model {
         $musteriId = (int)($data['musteri_id'] ?? 0);
         $this->requireMusteri($musteriId);
 
+        $toplam = (float)($data['toplam_tutar'] ?? 0);
+        $odemeDurumu = $toplam <= 0 ? 'odendi' : 'odenmedi';
+
         $id = $this->db->execute("
             INSERT INTO servisler (firma_id, musteri_id, servis_tipi, durum, toplam_tutar,
                                    odeme_durumu, odenen_tutar, notlar, tamamlanma_tarihi, created_at, updated_at)
-            VALUES (?,?,?,'tamamlanan',?,'odenmedi',0,?,?,?,?)
+            VALUES (?,?,?,'tamamlanan',?,?,0,?,?,?,?)
         ", [
             $this->firmaId, $musteriId, $data['servis_tipi'],
-            $data['toplam_tutar'] ?? 0, $data['notlar'] ?? null,
+            $toplam, $odemeDurumu, $data['notlar'] ?? null,
             $tarih, $tarih, $tarih,
         ]);
 
@@ -217,7 +220,7 @@ class Servis extends Model {
             "SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE kaynak_tip='servis' AND kaynak_id=? AND firma_id=?",
             [$id, $this->firmaId]
         );
-        $durum = $odenen <= 0 ? 'odenmedi' : ($odenen >= $toplam ? 'odendi' : 'kismi');
+        $durum = $toplam <= 0 ? 'odendi' : ($odenen <= 0 ? 'odenmedi' : ($odenen >= $toplam ? 'odendi' : 'kismi'));
         $this->db->query(
             "UPDATE servisler SET odeme_durumu=?, odenen_tutar=?, synced_at=NULL WHERE id=? AND firma_id=?",
             [$durum, min($odenen, $toplam), $id, $this->firmaId]

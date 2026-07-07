@@ -29,11 +29,12 @@ class Tahsilat extends Model {
         $this->requireKaynak($kaynakTip, $kaynakId, $musteriId);
 
         $id = $this->db->execute("
-            INSERT INTO tahsilatlar (firma_id, musteri_id, kaynak_tip, kaynak_id, tutar, odeme_yontemi, notlar, tahsilat_tarihi)
-            VALUES (?,?,?,?,?,?,?,?)
+            INSERT INTO tahsilatlar (firma_id, musteri_id, kaynak_tip, kaynak_id, taksit_id, tutar, odeme_yontemi, notlar, tahsilat_tarihi)
+            VALUES (?,?,?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $musteriId, $kaynakTip, $kaynakId,
+            $data['taksit_id'] ?? null,
             $data['tutar'], $data['odeme_yontemi'] ?? 'nakit',
             $data['notlar'] ?? null, $data['tahsilat_tarihi'] ?? date('Y-m-d'),
         ]);
@@ -52,6 +53,12 @@ class Tahsilat extends Model {
     }
 
     private function updateOdemeDurumu(string $tip, int $kaynakId): void {
+        if ($tip === 'satis') {
+            require_once __DIR__ . '/Taksit.php';
+            (new Taksit())->updateSatisOdeme($kaynakId);
+            return;
+        }
+
         $table = $tip === 'servis' ? 'servisler' : 'satislar';
 
         $toplam = (float) $this->db->fetchColumn("SELECT toplam_tutar FROM $table WHERE id=? AND firma_id=? AND deleted_at IS NULL", [$kaynakId, $this->firmaId]);
@@ -60,7 +67,7 @@ class Tahsilat extends Model {
             [$tip, $kaynakId, $this->firmaId]
         );
 
-        $durum = $odenen <= 0 ? 'odenmedi' : ($odenen >= $toplam ? 'odendi' : 'kismi');
+        $durum = $toplam <= 0 ? 'odendi' : ($odenen <= 0 ? 'odenmedi' : ($odenen >= $toplam ? 'odendi' : 'kismi'));
         $odenen = min($odenen, $toplam);
 
         $this->db->query(

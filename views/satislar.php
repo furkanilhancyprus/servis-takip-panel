@@ -452,7 +452,11 @@ include __DIR__ . '/layout/header.php';
                                     <span class="text-xs text-slate-400" x-text="formatDate(tk.vade_tarihi)"></span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="font-semibold" x-text="formatCurrency(tk.tutar)"></span>
+                                    <div class="text-right">
+                                        <span class="font-semibold block" x-text="formatCurrency(tk.tutar)"></span>
+                                        <span class="text-xs text-emerald-600" x-show="(+tk.odenen_tutar||0) > 0" x-text="'Ödenen: ' + formatCurrency(tk.odenen_tutar)"></span>
+                                        <span class="text-xs text-red-500 block" x-show="Math.max(0,(+tk.tutar||0)-(+tk.odenen_tutar||0)) > 0" x-text="'Kalan: ' + formatCurrency(Math.max(0,(+tk.tutar||0)-(+tk.odenen_tutar||0)))"></span>
+                                    </div>
                                     <button x-show="Number(tk.odendi) !== 1 && tk.taksit_no > 0"
                                             class="btn btn-sm btn-success py-0.5 px-2 text-xs"
                                             @click="odeTaksit(tk)">Öde</button>
@@ -502,7 +506,7 @@ include __DIR__ . '/layout/header.php';
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" x-show="detail?.odeme_durumu !== 'odendi' && detail?.odeme_turu !== 'taksitli'">
+            <div class="modal-footer" x-show="detail?.odeme_durumu !== 'odendi'">
                 <button class="btn btn-success" @click="showDetail=false; openTahsilat(detail)">
                     <i class="fas fa-money-bill-wave"></i> Tahsilat Al
                 </button>
@@ -568,7 +572,20 @@ include __DIR__ . '/layout/header.php';
                         <span x-text="taksitForm.taksit_no === 0 ? 'Peşinat' : `${taksitForm.taksit_no}. Taksit`" class="font-semibold"></span>
                         <span class="font-bold text-purple-700" x-text="formatCurrency(taksitForm.tutar)"></span>
                     </div>
+                    <div class="flex justify-between mt-1">
+                        <span>Ödenen</span>
+                        <span class="font-semibold text-emerald-700" x-text="formatCurrency(taksitForm.odenen_tutar || 0)"></span>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                        <span>Kalan</span>
+                        <span class="font-semibold text-red-600" x-text="formatCurrency(taksitForm.kalan_tutar || 0)"></span>
+                    </div>
                     <div class="text-slate-400 mt-1" x-text="`Vade: ${formatDate(taksitForm.vade_tarihi)}`"></div>
+                </div>
+                <div>
+                    <label class="form-label">Ödenecek Tutar</label>
+                    <input type="number" class="form-input" step="100" min="0.01" :max="taksitForm.kalan_tutar" x-model="taksitForm.odeme_tutar">
+                    <button type="button" class="btn btn-sm btn-secondary mt-2 w-full" @click="taksitForm.odeme_tutar = taksitForm.kalan_tutar">Kalanı Öde</button>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -622,6 +639,7 @@ function satislarApp() {
         },
         taksitForm: {
             id: null, taksit_no: 0, tutar: 0, vade_tarihi: '',
+            odenen_tutar: 0, kalan_tutar: 0, odeme_tutar: 0,
             odeme_yontemi: 'nakit', odeme_tarihi: new Date().toISOString().split('T')[0],
         },
 
@@ -833,9 +851,13 @@ function satislarApp() {
         },
 
         odeTaksit(tk) {
+            const kalan = Math.max(0, (parseFloat(tk.tutar) || 0) - (parseFloat(tk.odenen_tutar) || 0));
             this.taksitForm = {
                 id: tk.id, taksit_no: tk.taksit_no,
                 tutar: tk.tutar, vade_tarihi: tk.vade_tarihi,
+                odenen_tutar: parseFloat(tk.odenen_tutar) || 0,
+                kalan_tutar: kalan,
+                odeme_tutar: kalan,
                 odeme_yontemi: 'nakit',
                 odeme_tarihi: new Date().toISOString().split('T')[0],
             };
@@ -843,12 +865,17 @@ function satislarApp() {
         },
 
         async saveTaksitOde() {
+            const tutar = parseFloat(this.taksitForm.odeme_tutar || 0);
+            if (tutar <= 0 || tutar > parseFloat(this.taksitForm.kalan_tutar || 0)) {
+                showToast('Geçerli bir ödeme tutarı girin.', 'error'); return;
+            }
             this.saving = true;
             try {
                 await api('api/tahsilatlar.php', {
                     method: 'POST',
                     body: {
                         taksit_id:     this.taksitForm.id,
+                        tutar:         tutar,
                         odeme_yontemi: this.taksitForm.odeme_yontemi,
                         odeme_tarihi:  this.taksitForm.odeme_tarihi,
                     }

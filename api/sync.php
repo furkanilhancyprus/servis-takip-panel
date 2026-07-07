@@ -21,6 +21,9 @@ $tables = [
     'musteri_cihazlari',
     'taksitler',
     'standart_islem_parcalar',
+    'tedarikci_alimlari',
+    'tedarikci_alim_kalemleri',
+    'tedarikci_odemeleri',
 ];
 
 function sync_table_allowed(string $table, array $tables): bool {
@@ -42,8 +45,10 @@ function sync_ref_map(): array {
         'servis_id' => 'servisler',
         'parca_id' => 'parcalar',
         'satis_id' => 'satislar',
+        'taksit_id' => 'taksitler',
         'cihaz_id' => 'cihazlar',
         'islem_id' => 'standart_islemler',
+        'alim_id' => 'tedarikci_alimlari',
     ];
 }
 
@@ -86,6 +91,8 @@ function sync_pull_scope(string $table): ?array {
         'servis_parcalari' => ['JOIN servisler scope_s ON scope_s.id=servis_parcalari.servis_id', 'scope_s.firma_id'],
         'satis_kalemleri' => ['JOIN satislar scope_st ON scope_st.id=satis_kalemleri.satis_id', 'scope_st.firma_id'],
         'standart_islem_parcalar' => ['JOIN standart_islemler scope_si ON scope_si.id=standart_islem_parcalar.islem_id', 'scope_si.firma_id'],
+        'tedarikci_alim_kalemleri' => ['JOIN tedarikci_alimlari scope_ta ON scope_ta.id=tedarikci_alim_kalemleri.alim_id', 'scope_ta.firma_id'],
+        'tedarikci_odemeleri' => ['JOIN tedarikci_alimlari scope_ta ON scope_ta.id=tedarikci_odemeleri.alim_id', 'scope_ta.firma_id'],
         default => null,
     };
 }
