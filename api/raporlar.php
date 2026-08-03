@@ -201,7 +201,9 @@ switch ($tip) {
             $tahsilat = (float)$db->fetchColumn("
                 SELECT COALESCE(SUM(tutar),0)
                 FROM tahsilatlar
-                WHERE firma_id=? AND deleted_at IS NULL AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+                WHERE firma_id=? AND deleted_at IS NULL
+                  AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+                  AND DATE(tahsilat_tarihi) <= DATE('now')
             ", [$fid, $baslangic, $bitis]);
 
             $satisMaliyet = $satisModel->getMaliyetByDateRange($baslangic, $bitis, $usdKur);
@@ -226,7 +228,11 @@ switch ($tip) {
             $rows[] = [
                 'ay' => $ayNo,
                 'label' => ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][$ay - 1],
-                'satis_adet' => $satisModel->getAdetByDateRange($baslangic, $bitis),
+                'satis_adet' => (int)$db->fetchColumn("
+                    SELECT COUNT(*)
+                    FROM satislar
+                    WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+                ", [$fid, $baslangic, $bitis]),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
                 'satis_ciro' => $satisCiro,
                 'servis_ciro' => $servisCiro,
@@ -237,12 +243,73 @@ switch ($tip) {
             ];
         }
 
+        $yilBaslangic = "{$yil}-01-01";
+        $yilBitis = "{$yil}-12-31";
+        $ozetSatis = $db->fetchOne("
+            SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+            FROM satislar
+            WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$fid, $yilBaslangic, $yilBitis]);
+        $ozetServis = $db->fetchOne("
+            SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+            FROM servisler
+            WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$fid, $yilBaslangic, $yilBitis]);
+        $ozetTahsilat = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(tutar),0)
+            FROM tahsilatlar
+            WHERE firma_id=? AND deleted_at IS NULL
+              AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+              AND DATE(tahsilat_tarihi) <= DATE('now')
+        ", [$fid, $yilBaslangic, $yilBitis]);
+        $ozetSatisMaliyet = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(CASE WHEN line_cost > 0 THEN line_cost ELSE device_cost END),0)
+            FROM (
+                SELECT s.id,
+                       COALESCE(SUM(
+                           sk.miktar
+                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                       ),0) AS line_cost,
+                       COALESCE(cp.maliyet_usd, 0) * ? AS device_cost
+                FROM satislar s
+                LEFT JOIN satis_kalemleri sk ON sk.satis_id=s.id AND sk.deleted_at IS NULL
+                LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
+                LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
+                WHERE s.firma_id=? AND s.deleted_at IS NULL AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+                GROUP BY s.id
+            )
+        ", [$usdKur, $usdKur, $fid, $yilBaslangic, $yilBitis]);
+        $ozetServisMaliyet = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(
+                sp.miktar
+                * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
+            ),0)
+            FROM servis_parcalari sp
+            JOIN servisler s ON s.id=sp.servis_id AND s.deleted_at IS NULL
+            LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
+            WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+        ", [$usdKur, $fid, $yilBaslangic, $yilBitis]);
+        $ozetToplamCiro = (float)($ozetSatis['ciro'] ?? 0) + (float)($ozetServis['ciro'] ?? 0);
+        $ozetToplamMaliyet = $ozetSatisMaliyet + $ozetServisMaliyet;
+
         echo json_encode([
             'success' => true,
             'data' => [
                 'yil' => $yil,
                 'usd_try' => $usdKur,
                 'aylar' => $rows,
+                'ozet' => [
+                    'toplam_ciro' => $ozetToplamCiro,
+                    'tahsilat' => $ozetTahsilat,
+                    'net_kar' => $ozetToplamCiro - $ozetToplamMaliyet,
+                    'satis_adet' => (int)($ozetSatis['adet'] ?? 0),
+                    'servis_adet' => (int)($ozetServis['adet'] ?? 0),
+                    'toplam_maliyet' => $ozetToplamMaliyet,
+                    'tahakkuk_ciro' => array_sum(array_map(fn($row) => (float)($row['toplam_ciro'] ?? 0), $rows)),
+                ],
             ],
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -377,6 +444,271 @@ switch ($tip) {
         );
 
     case 'finans':
+        $db = Database::getInstance();
+        $fid = $_SESSION['firma_id'];
+        $baslangic = $_GET['baslangic'] ?? date('Y-m-01');
+        $bitis = $_GET['bitis'] ?? date('Y-m-d');
+        $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
+
+        $satisRows = [];
+        $pesinSatislar = $db->fetchAll("
+            SELECT
+                DATE(s.satis_tarihi) AS tarih,
+                s.id AS satis_id,
+                m.ad || ' ' || m.soyad AS musteri_adi,
+                m.telefon,
+                COALESCE(k.kalemler, NULLIF(TRIM(COALESCE(c.marka, '') || ' ' || COALESCE(c.cihaz_adi, '')), ''), 'Satis') AS aciklama,
+                s.odeme_turu,
+                s.toplam_tutar AS ciro,
+                CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END AS maliyet,
+                COALESCE(th.tahsilat, 0) AS tahsilat,
+                s.notlar
+            FROM satislar s
+            JOIN musteriler m ON m.id=s.musteri_id AND m.deleted_at IS NULL
+            LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT satis_id, GROUP_CONCAT(urun_adi, ', ') AS kalemler
+                FROM satis_kalemleri
+                WHERE deleted_at IS NULL
+                GROUP BY satis_id
+            ) k ON k.satis_id=s.id
+            LEFT JOIN (
+                SELECT sk.satis_id,
+                       COALESCE(SUM(
+                           sk.miktar
+                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                       ),0) AS line_cost
+                FROM satis_kalemleri sk
+                LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                WHERE sk.deleted_at IS NULL
+                GROUP BY sk.satis_id
+            ) lc ON lc.satis_id=s.id
+            LEFT JOIN (
+                SELECT c2.id AS cihaz_id, COALESCE(p2.maliyet_usd, 0) * ? AS device_cost
+                FROM cihazlar c2
+                LEFT JOIN parcalar p2 ON p2.id=c2.parca_id AND p2.deleted_at IS NULL
+                WHERE c2.deleted_at IS NULL
+            ) dc ON dc.cihaz_id=s.cihaz_id
+            LEFT JOIN (
+                SELECT kaynak_id, COALESCE(SUM(tutar),0) AS tahsilat
+                FROM tahsilatlar
+                WHERE firma_id=? AND deleted_at IS NULL AND kaynak_tip='satis'
+                  AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+                GROUP BY kaynak_id
+            ) th ON th.kaynak_id=s.id
+            WHERE s.firma_id=? AND s.deleted_at IS NULL
+              AND s.odeme_turu <> 'taksitli'
+              AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ORDER BY DATE(s.satis_tarihi) ASC, s.id ASC
+        ", [$usdKur, $usdKur, $fid, $baslangic, $bitis, $fid, $baslangic, $bitis]);
+
+        foreach ($pesinSatislar as $r) {
+            $satisRows[] = [
+                'tarih' => $r['tarih'],
+                'no' => (int)$r['satis_id'],
+                'musteri_adi' => $r['musteri_adi'] ?? '-',
+                'telefon' => $r['telefon'] ?? '-',
+                'aciklama' => $r['aciklama'] ?? 'Satis',
+                'tip' => $r['odeme_turu'] === 'pesin' ? 'Pesin satis' : 'Satis',
+                'ciro' => (float)($r['ciro'] ?? 0),
+                'maliyet' => (float)($r['maliyet'] ?? 0),
+                'tahsilat' => (float)($r['tahsilat'] ?? 0),
+                'notlar' => $r['notlar'] ?? '',
+            ];
+        }
+
+        $taksitliSatislar = $db->fetchAll("
+            SELECT
+                DATE(t.vade_tarihi) AS tarih,
+                s.id AS satis_id,
+                t.taksit_no,
+                m.ad || ' ' || m.soyad AS musteri_adi,
+                m.telefon,
+                COALESCE(k.kalemler, NULLIF(TRIM(COALESCE(c.marka, '') || ' ' || COALESCE(c.cihaz_adi, '')), ''), 'Satis') AS aciklama,
+                s.toplam_tutar,
+                t.tutar AS ciro,
+                CASE
+                    WHEN s.toplam_tutar > 0 THEN
+                        (CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END)
+                        * t.tutar / s.toplam_tutar
+                    ELSE 0
+                END AS maliyet,
+                COALESCE(th.tahsilat, 0) AS tahsilat,
+                s.notlar
+            FROM taksitler t
+            JOIN satislar s ON s.id=t.satis_id AND s.deleted_at IS NULL
+            JOIN musteriler m ON m.id=s.musteri_id AND m.deleted_at IS NULL
+            LEFT JOIN cihazlar c ON c.id=s.cihaz_id AND c.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT satis_id, GROUP_CONCAT(urun_adi, ', ') AS kalemler
+                FROM satis_kalemleri
+                WHERE deleted_at IS NULL
+                GROUP BY satis_id
+            ) k ON k.satis_id=s.id
+            LEFT JOIN (
+                SELECT sk.satis_id,
+                       COALESCE(SUM(
+                           sk.miktar
+                           * COALESCE(NULLIF(sk.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sk.usd_kur, 0) > 0 THEN sk.usd_kur ELSE ? END
+                       ),0) AS line_cost
+                FROM satis_kalemleri sk
+                LEFT JOIN parcalar p ON p.id=sk.parca_id AND p.deleted_at IS NULL
+                WHERE sk.deleted_at IS NULL
+                GROUP BY sk.satis_id
+            ) lc ON lc.satis_id=s.id
+            LEFT JOIN (
+                SELECT c2.id AS cihaz_id, COALESCE(p2.maliyet_usd, 0) * ? AS device_cost
+                FROM cihazlar c2
+                LEFT JOIN parcalar p2 ON p2.id=c2.parca_id AND p2.deleted_at IS NULL
+                WHERE c2.deleted_at IS NULL
+            ) dc ON dc.cihaz_id=s.cihaz_id
+            LEFT JOIN (
+                SELECT taksit_id, COALESCE(SUM(tutar),0) AS tahsilat
+                FROM tahsilatlar
+                WHERE firma_id=? AND deleted_at IS NULL AND kaynak_tip='satis'
+                  AND taksit_id IS NOT NULL
+                  AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+                GROUP BY taksit_id
+            ) th ON th.taksit_id=t.id
+            WHERE t.firma_id=? AND t.deleted_at IS NULL
+              AND s.firma_id=? AND s.odeme_turu='taksitli'
+              AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ORDER BY DATE(t.vade_tarihi) ASC, s.id ASC, t.taksit_no ASC
+        ", [$usdKur, $usdKur, $fid, $baslangic, $bitis, $fid, $fid, $baslangic, $bitis]);
+
+        foreach ($taksitliSatislar as $r) {
+            $taksitNo = (int)($r['taksit_no'] ?? 0);
+            $satisRows[] = [
+                'tarih' => $r['tarih'],
+                'no' => (int)$r['satis_id'],
+                'musteri_adi' => $r['musteri_adi'] ?? '-',
+                'telefon' => $r['telefon'] ?? '-',
+                'aciklama' => $r['aciklama'] ?? 'Satis',
+                'tip' => $taksitNo === 0 ? 'Pesinat' : $taksitNo . '. taksit',
+                'ciro' => (float)($r['ciro'] ?? 0),
+                'maliyet' => (float)($r['maliyet'] ?? 0),
+                'tahsilat' => (float)($r['tahsilat'] ?? 0),
+                'notlar' => $r['notlar'] ?? '',
+            ];
+        }
+
+        usort($satisRows, function ($a, $b) {
+            $cmp = strcmp((string)$a['tarih'], (string)$b['tarih']);
+            return $cmp !== 0 ? $cmp : ((int)$a['no'] <=> (int)$b['no']);
+        });
+
+        $servisRows = $db->fetchAll("
+            SELECT
+                DATE(s.tamamlanma_tarihi) AS tarih,
+                s.id AS servis_id,
+                m.ad || ' ' || m.soyad AS musteri_adi,
+                m.telefon,
+                s.servis_tipi,
+                COALESCE(i.islemler, CASE WHEN s.servis_tipi='ariza' THEN 'Ariza' ELSE 'Periyodik bakim' END) AS aciklama,
+                s.toplam_tutar AS ciro,
+                COALESCE(pc.maliyet, 0) AS maliyet,
+                COALESCE(th.tahsilat, 0) AS tahsilat,
+                s.notlar
+            FROM servisler s
+            JOIN musteriler m ON m.id=s.musteri_id AND m.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT servis_id, GROUP_CONCAT(islem, ', ') AS islemler
+                FROM servis_islemleri
+                WHERE deleted_at IS NULL
+                GROUP BY servis_id
+            ) i ON i.servis_id=s.id
+            LEFT JOIN (
+                SELECT sp.servis_id,
+                       COALESCE(SUM(
+                           sp.miktar
+                           * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                           * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
+                       ),0) AS maliyet
+                FROM servis_parcalari sp
+                LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
+                WHERE sp.deleted_at IS NULL
+                GROUP BY sp.servis_id
+            ) pc ON pc.servis_id=s.id
+            LEFT JOIN (
+                SELECT kaynak_id, COALESCE(SUM(tutar),0) AS tahsilat
+                FROM tahsilatlar
+                WHERE firma_id=? AND deleted_at IS NULL AND kaynak_tip='servis'
+                  AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+                GROUP BY kaynak_id
+            ) th ON th.kaynak_id=s.id
+            WHERE s.firma_id=? AND s.deleted_at IS NULL
+              AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
+            ORDER BY DATE(s.tamamlanma_tarihi) ASC, s.id ASC
+        ", [$usdKur, $fid, $baslangic, $bitis, $fid, $baslangic, $bitis]);
+
+        $data = [];
+        $totals = [
+            'satis_ciro' => 0.0, 'satis_maliyet' => 0.0, 'satis_tahsilat' => 0.0,
+            'servis_ciro' => 0.0, 'servis_maliyet' => 0.0, 'servis_tahsilat' => 0.0,
+        ];
+
+        $data[] = ['SATISLAR', '', '', '', '', '', '', '', '', '', '', ''];
+        foreach ($satisRows as $r) {
+            $ciro = (float)$r['ciro'];
+            $maliyet = (float)$r['maliyet'];
+            $tahsilat = (float)$r['tahsilat'];
+            $totals['satis_ciro'] += $ciro;
+            $totals['satis_maliyet'] += $maliyet;
+            $totals['satis_tahsilat'] += $tahsilat;
+            $data[] = [
+                'Satis',
+                $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
+                $r['no'],
+                $r['musteri_adi'],
+                $r['telefon'],
+                $r['aciklama'],
+                $r['tip'],
+                round($ciro, 2),
+                round($maliyet, 2),
+                round($ciro - $maliyet, 2),
+                round($tahsilat, 2),
+                $r['notlar'] ?: '-',
+            ];
+        }
+
+        $data[] = ['', '', '', '', '', '', 'SATIS TOPLAMI', round($totals['satis_ciro'], 2), round($totals['satis_maliyet'], 2), round($totals['satis_ciro'] - $totals['satis_maliyet'], 2), round($totals['satis_tahsilat'], 2), ''];
+        $data[] = ['', '', '', '', '', '', '', '', '', '', '', ''];
+        $data[] = ['SERVISLER', '', '', '', '', '', '', '', '', '', '', ''];
+        foreach ($servisRows as $r) {
+            $ciro = (float)($r['ciro'] ?? 0);
+            $maliyet = (float)($r['maliyet'] ?? 0);
+            $tahsilat = (float)($r['tahsilat'] ?? 0);
+            $totals['servis_ciro'] += $ciro;
+            $totals['servis_maliyet'] += $maliyet;
+            $totals['servis_tahsilat'] += $tahsilat;
+            $data[] = [
+                'Servis',
+                $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
+                (int)$r['servis_id'],
+                $r['musteri_adi'] ?? '-',
+                $r['telefon'] ?? '-',
+                $r['aciklama'] ?? '-',
+                $r['servis_tipi'] === 'ariza' ? 'Ariza' : 'Periyodik bakim',
+                round($ciro, 2),
+                round($maliyet, 2),
+                round($ciro - $maliyet, 2),
+                round($tahsilat, 2),
+                $r['notlar'] ?: '-',
+            ];
+        }
+
+        $data[] = ['', '', '', '', '', '', 'SERVIS TOPLAMI', round($totals['servis_ciro'], 2), round($totals['servis_maliyet'], 2), round($totals['servis_ciro'] - $totals['servis_maliyet'], 2), round($totals['servis_tahsilat'], 2), ''];
+        $data[] = ['', '', '', '', '', '', 'GENEL TOPLAM', round($totals['satis_ciro'] + $totals['servis_ciro'], 2), round($totals['satis_maliyet'] + $totals['servis_maliyet'], 2), round(($totals['satis_ciro'] + $totals['servis_ciro']) - ($totals['satis_maliyet'] + $totals['servis_maliyet']), 2), round($totals['satis_tahsilat'] + $totals['servis_tahsilat'], 2), 'USD kuru: ' . $usdKur];
+
+        xlsxResponse(
+            ['Bolum', 'Tarih', 'Kayit No', 'Musteri', 'Telefon', 'Islem / Urun', 'Tip / Odeme', 'Ciro (TL)', 'Maliyet (TL)', 'Net Kar (TL)', 'Gercek Tahsilat (TL)', 'Notlar'],
+            $data,
+            "finans_raporu_$tarih.xlsx",
+            'Finans'
+        );
+
         $s = new Servis();
         $filtre = [
             'baslangic' => $_GET['baslangic'] ?? date('Y-m-01'),

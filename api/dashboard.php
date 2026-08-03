@@ -29,7 +29,7 @@ $buAyYapilan  = $servis->getBuAyYapilan();
 $kritikStok   = $parca->getKritikStoklar();
 $musteriStats = $musteri->getStats();
 $tahsilOzeti  = $tahsilat->getTahsilOzeti();
-$buAySatis    = $satis->getBuAyToplam();
+$buAySatis    = $satis->getCiroByDateRange($ayBaslangic, $ayBitis);
 
 $buAyCiro     = array_sum(array_column($buAyYapilan, 'toplam_tutar')) + $buAySatis;
 

@@ -18,7 +18,7 @@ include __DIR__ . '/layout/header.php';
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Ciro</p>
-            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(stats.buAyCiro)"></p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(karOzet.toplam_ciro || stats.buAyCiro)"></p>
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Stok Değeri</p>
@@ -181,7 +181,7 @@ include __DIR__ . '/layout/header.php';
                             <input type="date" class="form-input" x-model="finansFiltre.bitis">
                         </div>
                     </div>
-                    <a :href="`api/raporlar.php?tip=finans&baslangic=${finansFiltre.baslangic}&bitis=${finansFiltre.bitis}`"
+                    <a :href="`api/raporlar.php?tip=finans&baslangic=${finansFiltre.baslangic}&bitis=${finansFiltre.bitis}&usd_try=${doviz.usd_try || 0}`"
                        class="btn btn-sm inline-flex"
                        style="background:#7c3aed;color:#fff;"
                        target="_blank">
@@ -237,7 +237,7 @@ include __DIR__ . '/layout/header.php';
                 <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(trendOzet.toplam_ciro)"></p>
             </div>
             <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
-                <p class="text-xs text-blue-500 font-semibold uppercase">Tahsilat</p>
+                <p class="text-xs text-blue-500 font-semibold uppercase">Gerçek Tahsilat</p>
                 <p class="text-lg font-bold text-blue-700 mt-1" x-text="formatCurrency(trendOzet.tahsilat)"></p>
             </div>
             <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
@@ -267,7 +267,7 @@ include __DIR__ . '/layout/header.php';
                         <th>Satış</th>
                         <th>Servis</th>
                         <th>Ciro</th>
-                        <th>Tahsilat</th>
+                        <th>Gerçek Tahsilat</th>
                         <th>Maliyet</th>
                         <th>Net Kâr</th>
                     </tr>
@@ -297,6 +297,7 @@ function raporlarApp() {
         doviz: { usd_try: 0 },
         karOzet: {},
         trendData: [],
+        trendSummary: null,
         trendYil: '<?= date('Y') ?>',
         trendChart: null,
         trendChartError: '',
@@ -347,11 +348,15 @@ function raporlarApp() {
                 });
                 const d = await api(`api/raporlar.php?${p}`);
                 this.trendData = d.aylar || [];
+                this.trendSummary = d.ozet || null;
                 this.$nextTick(() => this.renderTrend());
             } catch(e) {}
         },
 
         get trendOzet() {
+            if (this.trendSummary) {
+                return this.trendSummary;
+            }
             return this.trendData.reduce((acc, row) => {
                 acc.toplam_ciro += Number(row.toplam_ciro || 0);
                 acc.tahsilat += Number(row.tahsilat || 0);
@@ -386,7 +391,7 @@ function raporlarApp() {
                         },
                         {
                             type: 'line',
-                            label: 'Tahsilat',
+                            label: 'Gerçek Tahsilat',
                             data: this.trendData.map(row => Number(row.tahsilat || 0)),
                             borderColor: '#059669',
                             backgroundColor: 'rgba(5,150,105,.12)',
@@ -490,7 +495,7 @@ function raporlarApp() {
                 },
                 {
                     type: 'line',
-                    label: 'Tahsilat',
+                    label: 'Gerçek Tahsilat',
                     data: this.trendData.map(row => row.tahsilat || 0),
                     borderColor: '#059669',
                     backgroundColor: 'rgba(5,150,105,.12)',

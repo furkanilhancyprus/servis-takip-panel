@@ -122,7 +122,10 @@ class Tahsilat extends Model {
             "SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE firma_id=? AND deleted_at IS NULL AND tahsilat_tarihi=date('now')", [$fid]
         );
         $buay = (float) $this->db->fetchColumn(
-            "SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE firma_id=? AND deleted_at IS NULL AND strftime('%Y-%m',tahsilat_tarihi)=strftime('%Y-%m','now')", [$fid]
+            "SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar
+             WHERE firma_id=? AND deleted_at IS NULL
+               AND strftime('%Y-%m',tahsilat_tarihi)=strftime('%Y-%m','now')
+               AND DATE(tahsilat_tarihi) <= DATE('now')", [$fid]
         );
         $bekleyen  = (float) $this->db->fetchColumn(
             "SELECT COALESCE(SUM(toplam_tutar-odenen_tutar),0) FROM servisler WHERE firma_id=? AND deleted_at IS NULL AND odeme_durumu IN ('odenmedi','kismi')", [$fid]
@@ -139,7 +142,9 @@ class Tahsilat extends Model {
         for ($ay = 1; $ay <= 12; $ay++) {
             $total = $this->db->fetchColumn(
                 "SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar
-                 WHERE firma_id=? AND deleted_at IS NULL AND strftime('%Y',tahsilat_tarihi)=? AND strftime('%m',tahsilat_tarihi)=?",
+                 WHERE firma_id=? AND deleted_at IS NULL
+                   AND strftime('%Y',tahsilat_tarihi)=? AND strftime('%m',tahsilat_tarihi)=?
+                   AND DATE(tahsilat_tarihi) <= DATE('now')",
                 [$this->firmaId, (string)$yil, str_pad((string)$ay, 2, '0', STR_PAD_LEFT)]
             );
             $aylik[] = (float)$total;
