@@ -648,25 +648,33 @@ function satislarApp() {
         },
 
         get satisRows() {
-            const sorted = [...this.satislar].sort((a, b) => {
+            const chronological = [...this.satislar].sort((a, b) => {
                 const dateA = this.saleDateKey(a);
                 const dateB = this.saleDateKey(b);
                 if (dateA !== dateB) return dateA.localeCompare(dateB);
                 return (Number(a.id) || 0) - (Number(b.id) || 0);
             });
-            const monthCounts = sorted.reduce((acc, sale) => {
+            const monthlyNo = {};
+            const monthCounts = chronological.reduce((acc, sale) => {
                 const month = this.saleMonthKey(sale);
                 acc[month] = (acc[month] || 0) + 1;
+                monthlyNo[sale.id] = acc[month];
                 return acc;
             }, {});
+
+            const displayRows = [...this.satislar].sort((a, b) => {
+                const dateA = this.saleDateKey(a);
+                const dateB = this.saleDateKey(b);
+                if (dateA !== dateB) return dateB.localeCompare(dateA);
+                return (Number(b.id) || 0) - (Number(a.id) || 0);
+            });
+
             const rows = [];
             let activeMonth = '';
-            let monthNo = 0;
-            sorted.forEach((sale) => {
+            displayRows.forEach((sale) => {
                 const month = this.saleMonthKey(sale);
                 if (month !== activeMonth) {
                     activeMonth = month;
-                    monthNo = 0;
                     rows.push({
                         type: 'month',
                         key: `month-${month}`,
@@ -674,8 +682,7 @@ function satislarApp() {
                         count: monthCounts[month] || 0,
                     });
                 }
-                monthNo++;
-                rows.push({ type: 'sale', key: `sale-${sale.id}`, no: monthNo, item: sale });
+                rows.push({ type: 'sale', key: `sale-${sale.id}`, no: monthlyNo[sale.id] || '', item: sale });
             });
             return rows;
         },
