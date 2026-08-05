@@ -13,10 +13,11 @@ class Tahsilat extends Model {
 
         if (!empty($filtre['musteri_id'])) { $sql .= " AND t.musteri_id=?";     $params[] = $filtre['musteri_id']; }
         if (!empty($filtre['kaynak_tip'])) { $sql .= " AND t.kaynak_tip=?";     $params[] = $filtre['kaynak_tip']; }
+        if (!empty($filtre['kaynak_id']))  { $sql .= " AND t.kaynak_id=?";      $params[] = $filtre['kaynak_id']; }
         if (!empty($filtre['baslangic'])) { $sql .= " AND t.tahsilat_tarihi>=?"; $params[] = $filtre['baslangic']; }
         if (!empty($filtre['bitis']))     { $sql .= " AND t.tahsilat_tarihi<=?"; $params[] = $filtre['bitis']; }
 
-        $sql .= " ORDER BY t.created_at DESC";
+        $sql .= " ORDER BY DATE(t.tahsilat_tarihi) DESC, t.id DESC";
         if (!empty($filtre['limit'])) { $sql .= " LIMIT " . (int)$filtre['limit']; }
 
         return $this->db->fetchAll($sql, $params);
@@ -42,6 +43,42 @@ class Tahsilat extends Model {
         $this->updateOdemeDurumu($kaynakTip, $kaynakId);
 
         return $id;
+    }
+
+    public function update(int $id, array $data): void {
+        $row = $this->db->fetchOne(
+            "SELECT * FROM tahsilatlar WHERE id=? AND firma_id=? AND deleted_at IS NULL",
+            [$id, $this->firmaId]
+        );
+        if (!$row) {
+            throw new InvalidArgumentException('Tahsilat kaydi bulunamadi.');
+        }
+
+        $tutar = array_key_exists('tutar', $data) ? (float)$data['tutar'] : (float)$row['tutar'];
+        if ($tutar < 0 || (($row['kaynak_tip'] ?? '') !== 'servis' && $tutar <= 0)) {
+            throw new InvalidArgumentException('Gecerli bir tutar girin.');
+        }
+
+        $tarih = trim((string)($data['tahsilat_tarihi'] ?? $row['tahsilat_tarihi'] ?? date('Y-m-d')));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tarih)) {
+            throw new InvalidArgumentException('Gecersiz tahsilat tarihi.');
+        }
+
+        $this->db->query(
+            "UPDATE tahsilatlar
+             SET tutar=?, odeme_yontemi=?, notlar=?, tahsilat_tarihi=?, synced_at=NULL
+             WHERE id=? AND firma_id=?",
+            [
+                $tutar,
+                $data['odeme_yontemi'] ?? $row['odeme_yontemi'] ?? 'nakit',
+                $data['notlar'] ?? $row['notlar'] ?? null,
+                $tarih,
+                $id,
+                $this->firmaId,
+            ]
+        );
+
+        $this->updateOdemeDurumu((string)$row['kaynak_tip'], (int)$row['kaynak_id']);
     }
 
     public function delete(int $id): void {

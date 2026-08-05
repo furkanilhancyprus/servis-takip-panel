@@ -131,7 +131,7 @@ class Taksit extends Model {
             [$satisId, $this->firmaId]
         );
 
-        $this->rebuildTaksitOdemeleri($satisId, $tahsilat);
+        $this->rebuildTaksitOdemeleri($satisId);
 
         $odenen = min($toplam, $pesinat + $tahsilat);
         $durum = $odenen <= 0 ? 'odenmedi' : ($odenen >= $toplam ? 'odendi' : 'kismi');
@@ -141,21 +141,49 @@ class Taksit extends Model {
         );
     }
 
-    private function rebuildTaksitOdemeleri(int $satisId, float $odenenTaksitTutari): void {
+    private function rebuildTaksitOdemeleri(int $satisId): void {
         $rows = $this->db->fetchAll(
             "SELECT id, tutar FROM taksitler WHERE satis_id=? AND firma_id=? AND taksit_no>0 AND deleted_at IS NULL ORDER BY taksit_no ASC",
             [$satisId, $this->firmaId]
         );
+        $payments = $this->db->fetchAll(
+            "SELECT id, tutar, tahsilat_tarihi
+             FROM tahsilatlar
+             WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? AND deleted_at IS NULL
+             ORDER BY DATE(tahsilat_tarihi) ASC, id ASC",
+            [$satisId, $this->firmaId]
+        );
+        $paymentIndex = 0;
+        $paymentLeft = isset($payments[0]) ? (float)$payments[0]['tutar'] : 0.0;
+        $lastPaymentDate = null;
+
         foreach ($rows as $row) {
             $tutar = (float)$row['tutar'];
-            $pay = min($tutar, max(0, $odenenTaksitTutari));
-            $odenenTaksitTutari -= $pay;
+            $pay = 0.0;
+            $completedAt = null;
+
+            while ($pay < $tutar && isset($payments[$paymentIndex])) {
+                if ($paymentLeft <= 0) {
+                    $paymentIndex++;
+                    $paymentLeft = isset($payments[$paymentIndex]) ? (float)$payments[$paymentIndex]['tutar'] : 0.0;
+                    continue;
+                }
+
+                $piece = min($tutar - $pay, $paymentLeft);
+                $pay += $piece;
+                $paymentLeft -= $piece;
+                $lastPaymentDate = $payments[$paymentIndex]['tahsilat_tarihi'] ?? null;
+                if ($pay >= $tutar) {
+                    $completedAt = $lastPaymentDate;
+                }
+            }
+
             $odendi = $tutar <= 0 || $pay >= $tutar ? 1 : 0;
             $this->db->query(
                 "UPDATE taksitler
-                 SET odenen_tutar=?, odendi=?, odeme_tarihi=CASE WHEN ?=1 THEN COALESCE(odeme_tarihi, date('now')) ELSE NULL END, synced_at=NULL
+                 SET odenen_tutar=?, odendi=?, odeme_tarihi=?, synced_at=NULL
                  WHERE id=? AND firma_id=?",
-                [$pay, $odendi, $odendi, (int)$row['id'], $this->firmaId]
+                [$pay, $odendi, $odendi ? $completedAt : null, (int)$row['id'], $this->firmaId]
             );
         }
     }

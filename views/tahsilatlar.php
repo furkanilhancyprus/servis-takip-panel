@@ -226,8 +226,46 @@ require_once ROOT . '/views/layout/header.php';
                                         </div>
                                         <div class="text-right">
                                             <p class="font-semibold text-slate-800" x-text="fmt(tk.tutar)"></p>
-                                            <span class="badge" :class="Number(tk.odendi) === 1 ? 'badge-green' : 'badge-yellow'" x-text="Number(tk.odendi) === 1 ? 'Ödendi' : 'Bekliyor'"></span>
+                                            <p class="text-xs text-slate-400" x-show="(+tk.odenen_tutar || 0) > 0">
+                                                Ödenen: <span x-text="fmt(tk.odenen_tutar)"></span>
+                                            </p>
+                                            <p class="text-xs text-red-500" x-show="(+tk.kalan_tutar || 0) > 0 && (+tk.odenen_tutar || 0) > 0">
+                                                Kalan: <span x-text="fmt(tk.kalan_tutar)"></span>
+                                            </p>
+                                            <span class="badge"
+                                                  :class="Number(tk.odendi) === 1 ? 'badge-green' : ((+tk.odenen_tutar || 0) > 0 ? 'badge-blue' : 'badge-yellow')"
+                                                  x-text="Number(tk.odendi) === 1 ? 'Ödendi' : ((+tk.odenen_tutar || 0) > 0 ? 'Kısmi' : 'Bekliyor')"></span>
                                         </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="border border-slate-100 rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tahsilat geçmişi</div>
+                            <div class="divide-y divide-slate-100">
+                                <template x-if="!(satisDetay.tahsilatlar || []).length">
+                                    <div class="px-4 py-6 text-center text-sm text-slate-400">Bu satış için tahsilat kaydı yok.</div>
+                                </template>
+                                <template x-for="th in (satisDetay.tahsilatlar || [])" :key="th.id">
+                                    <div class="px-4 py-3 flex items-center justify-between gap-3">
+                                        <div>
+                                            <p class="font-medium text-slate-800" x-text="fmt(th.tutar)"></p>
+                                            <p class="text-xs text-slate-400">
+                                                <span x-text="formatTarih(th.tahsilat_tarihi)"></span>
+                                                <span x-text="th.odeme_yontemi ? ` · ${odemeLabel(th.odeme_yontemi)}` : ''"></span>
+                                                <span x-text="th.notlar ? ` · ${th.notlar}` : ''"></span>
+                                            </p>
+                                        </div>
+                                        <div class="flex items-center gap-2" x-show="!th.readonly">
+                                            <button type="button" @click="openEditTahsilat(th)" class="btn btn-secondary btn-sm">
+                                                <i class="fas fa-pen"></i> Düzenle
+                                            </button>
+                                            <button type="button" @click="deleteTahsilat(th)" class="btn btn-sm" style="background:#fee2e2;color:#dc2626;">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        <span x-show="th.readonly" class="badge badge-green">Peşinat</span>
                                     </div>
                                 </template>
                             </div>
@@ -246,6 +284,46 @@ require_once ROOT . '/views/layout/header.php';
         </div>
     </div>
 
+    <!-- MODAL: Tahsilat Duzenle -->
+    <div x-show="editTahsilatModal" x-cloak class="modal-backdrop" @click.self="editTahsilatModal=false">
+        <div class="modal-box max-w-md">
+            <div class="modal-header">
+                <h3 class="font-semibold text-slate-800">Tahsilat Düzenle</h3>
+                <button @click="editTahsilatModal=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body space-y-4">
+                <div>
+                    <label class="form-label">Tahsilat Tutarı *</label>
+                    <input x-model="editTahsilatForm.tutar" type="number" step="0.01" min="0.01" class="form-input" placeholder="0.00">
+                </div>
+                <div>
+                    <label class="form-label">Ödeme Yöntemi</label>
+                    <select x-model="editTahsilatForm.odeme_yontemi" class="form-select">
+                        <option value="nakit">Nakit</option>
+                        <option value="kart">Kredi/Banka Kartı</option>
+                        <option value="havale">Havale / EFT</option>
+                        <option value="cek">Çek</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Tarih</label>
+                    <input x-model="editTahsilatForm.tahsilat_tarihi" type="date" class="form-input">
+                </div>
+                <div>
+                    <label class="form-label">Notlar</label>
+                    <textarea x-model="editTahsilatForm.notlar" rows="2" class="form-textarea"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button @click="editTahsilatModal=false" class="btn btn-secondary">İptal</button>
+                <button @click="saveEditTahsilat()" :disabled="saving" class="btn btn-primary">
+                    <span x-show="saving"><i class="fas fa-spinner fa-spin"></i></span>
+                    <span x-show="!saving"><i class="fas fa-check"></i> Kaydet</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -255,6 +333,8 @@ function tahsilatApp() {
         ozet: {}, servisOdemeleri: [], satisOdemeleri: [],
         tahsilatModal: false, saving: false,
         satisDetayModal: false, satisDetayLoading: false, satisDetay: null,
+        editTahsilatModal: false,
+        editTahsilatForm: { id:0, tutar:0, odeme_yontemi:'nakit', tahsilat_tarihi:todayStr(), notlar:'' },
         tahsilatForm: { musteri_id:0, kaynak_tip:'', kaynak_id:0, musteri_adi:'', toplam_tutar:0, odenen_tutar:0, kalan:0, tutar:0, odeme_yontemi:'nakit', tarih:todayStr(), notlar:'' },
 
         csrfHeaders() {
@@ -299,18 +379,86 @@ function tahsilatApp() {
             }
         },
 
+        async refreshSatisDetay() {
+            if (!this.satisDetay?.id) return;
+            const r = await fetch(`api/satislar.php?id=${this.satisDetay.id}`);
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'Satış detayı alınamadı.');
+            this.satisDetay = d.data;
+        },
+
+        openEditTahsilat(th) {
+            this.editTahsilatForm = {
+                id: th.id,
+                tutar: th.tutar,
+                odeme_yontemi: th.odeme_yontemi || 'nakit',
+                tahsilat_tarihi: th.tahsilat_tarihi || todayStr(),
+                notlar: th.notlar || ''
+            };
+            this.editTahsilatModal = true;
+        },
+
+        async saveEditTahsilat() {
+            if (!this.editTahsilatForm.id) return;
+            if (!this.editTahsilatForm.tutar || parseFloat(this.editTahsilatForm.tutar) <= 0) {
+                showToast('Geçerli bir tutar girin.', 'error');
+                return;
+            }
+            this.saving = true;
+            try {
+                const r = await fetch(`api/tahsilatlar.php?id=${this.editTahsilatForm.id}`, {
+                    method: 'PUT',
+                    headers: this.csrfHeaders(),
+                    body: JSON.stringify(this.editTahsilatForm)
+                });
+                const d = await r.json();
+                if (!d.success) throw new Error(d.message || 'Tahsilat güncellenemedi.');
+                showToast(d.message || 'Tahsilat güncellendi.', 'success');
+                this.editTahsilatModal = false;
+                await this.refreshSatisDetay();
+                await this.init();
+            } catch (e) {
+                showToast(e.message || 'Tahsilat güncellenemedi.', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async deleteTahsilat(th) {
+            if (!confirm(`${this.fmt(th.tutar)} tutarındaki tahsilat silinsin mi?`)) return;
+            try {
+                const r = await fetch(`api/tahsilatlar.php?id=${th.id}`, {
+                    method: 'DELETE',
+                    headers: this.csrfHeaders()
+                });
+                const d = await r.json();
+                if (!d.success) throw new Error(d.message || 'Tahsilat silinemedi.');
+                showToast(d.message || 'Tahsilat silindi.', 'success');
+                await this.refreshSatisDetay();
+                await this.init();
+            } catch (e) {
+                showToast(e.message || 'Tahsilat silinemedi.', 'error');
+            }
+        },
+
         async saveTahsilat() {
             if (!this.tahsilatForm.tutar || parseFloat(this.tahsilatForm.tutar) <= 0) { showToast('Geçerli bir tutar girin.', 'error'); return; }
             this.saving = true;
             try {
                 const r = await fetch('api/tahsilatlar.php', { method:'POST', headers:this.csrfHeaders(), body:JSON.stringify({ musteri_id:this.tahsilatForm.musteri_id, kaynak_tip:this.tahsilatForm.kaynak_tip, kaynak_id:this.tahsilatForm.kaynak_id, tutar:this.tahsilatForm.tutar, odeme_yontemi:this.tahsilatForm.odeme_yontemi, tahsilat_tarihi:this.tahsilatForm.tarih, notlar:this.tahsilatForm.notlar }) });
                 const d = await r.json();
-                if (d.success) { showToast(d.message ?? 'Tahsilat kaydedildi.', 'success'); this.tahsilatModal=false; await this.init(); }
+                if (d.success) {
+                    showToast(d.message ?? 'Tahsilat kaydedildi.', 'success');
+                    this.tahsilatModal=false;
+                    if (this.satisDetayModal && this.satisDetay?.id) await this.refreshSatisDetay();
+                    await this.init();
+                }
                 else showToast(d.message ?? 'Hata!', 'error');
             } finally { this.saving=false; }
         },
 
         fmt(v) { return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:2}).format(parseFloat(v)||0); },
+        odemeLabel(v) { return ({ nakit:'Nakit', kart:'Kart', havale:'Havale / EFT', cek:'Çek' })[v] || v || '-'; },
         formatTarih(d) { if(!d) return '—'; const [y,m,g]=d.split('-'); return g+'.'+m+'.'+y; },
     };
 }

@@ -257,6 +257,7 @@ include __DIR__ . '/layout/header.php';
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(1)">+1 Ay</button>
+                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(2)">+2 Ay</button>
                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(3)">+3 Ay</button>
                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleAyEkle(6)">+6 Ay</button>
                 </div>

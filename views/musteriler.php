@@ -372,10 +372,18 @@ include __DIR__ . '/layout/header.php';
                                 <div>
                                     <label class="form-label">Son Bakım</label>
                                     <input type="date" class="form-input" x-model="bakimForm.son_bakim_tarihi">
+                                    <div class="flex flex-wrap gap-1.5 mt-2">
+                                        <button type="button" class="btn btn-sm btn-secondary" @click="setSonBakimAyOnce(0)">Bugün</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" @click="setSonBakimAyOnce(2)">2 Ay Önce</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" @click="setSonBakimAyOnce(3)">3 Ay Önce</button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="form-label">Sonraki Bakım</label>
                                     <input type="date" class="form-input" x-model="bakimForm.sonraki_bakim_tarihi">
+                                    <button type="button" class="text-xs text-blue-600 hover:underline mt-2" @click="setSonrakiBakimFromSonBakim()">
+                                        Son bakımdan periyoda göre hesapla
+                                    </button>
                                 </div>
                                 <div>
                                     <label class="form-label">Hatırlatma (Gün)</label>
@@ -393,6 +401,7 @@ include __DIR__ . '/layout/header.php';
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div class="flex flex-wrap gap-2">
                                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(1)">+1 Ay Ertele</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(2)">+2 Ay Ertele</button>
                                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(3)">+3 Ay Ertele</button>
                                     <button type="button" class="btn btn-sm btn-secondary" @click="erteleBakimAy(6)">+6 Ay Ertele</button>
                                 </div>
@@ -757,8 +766,31 @@ function musterilerApp() {
             this.bakimForm.aktif = true;
         },
 
+        setSonBakimAyOnce(ay) {
+            const d = new Date();
+            d.setHours(12, 0, 0, 0);
+            d.setMonth(d.getMonth() - ay);
+            this.bakimForm.son_bakim_tarihi = d.toISOString().slice(0, 10);
+            this.setSonrakiBakimFromSonBakim();
+            this.bakimForm.aktif = true;
+        },
+
+        setSonrakiBakimFromSonBakim() {
+            if (!this.bakimForm.son_bakim_tarihi) {
+                showToast('Önce son bakım tarihini seçiniz.', 'error');
+                return;
+            }
+            const d = new Date(this.bakimForm.son_bakim_tarihi + 'T12:00:00');
+            d.setMonth(d.getMonth() + (parseInt(this.bakimForm.periyot_ay) || 6));
+            this.bakimForm.sonraki_bakim_tarihi = d.toISOString().slice(0, 10);
+            this.bakimForm.aktif = true;
+        },
+
         async saveBakimPlan() {
             if (!this.detail?.id) return;
+            if (this.bakimForm.son_bakim_tarihi && !this.bakimForm.sonraki_bakim_tarihi) {
+                this.setSonrakiBakimFromSonBakim();
+            }
             this.saving = true;
             try {
                 await api(`api/bakimlar.php?musteri_id=${this.detail.id}`, { method: 'PUT', body: this.bakimForm });

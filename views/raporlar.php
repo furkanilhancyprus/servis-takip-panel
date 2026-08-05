@@ -181,6 +181,12 @@ include __DIR__ . '/layout/header.php';
                             <input type="date" class="form-input" x-model="finansFiltre.bitis">
                         </div>
                     </div>
+                    <a :href="`index.php?page=finans_raporu&baslangic=${finansFiltre.baslangic}&bitis=${finansFiltre.bitis}&usd_try=${doviz.usd_try || 0}`"
+                       class="btn btn-sm inline-flex mr-2"
+                       style="background:#0f766e;color:#fff;"
+                       target="_blank">
+                        <i class="fas fa-table-list text-xs"></i> Detaylı Görüntüle
+                    </a>
                     <a :href="`api/raporlar.php?tip=finans&baslangic=${finansFiltre.baslangic}&bitis=${finansFiltre.bitis}&usd_try=${doviz.usd_try || 0}`"
                        class="btn btn-sm inline-flex"
                        style="background:#7c3aed;color:#fff;"

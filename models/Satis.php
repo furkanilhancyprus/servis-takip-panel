@@ -34,7 +34,7 @@ class Satis extends Model {
 
     public function getById(int $id) {
         $satis = $this->db->fetchOne("
-            SELECT st.*, m.ad, m.soyad, m.telefon, m.adres,
+            SELECT st.*, m.ad, m.soyad, m.ad || ' ' || m.soyad AS musteri_adi, m.telefon, m.adres,
                    c.cihaz_adi, c.marka AS cihaz_marka, c.model AS cihaz_model
             FROM satislar st
             JOIN musteriler m ON st.musteri_id=m.id AND m.deleted_at IS NULL
@@ -44,13 +44,28 @@ class Satis extends Model {
 
         if (!$satis) return false;
 
+        if (($satis['odeme_turu'] ?? '') === 'taksitli') {
+            require_once __DIR__ . '/Taksit.php';
+            (new Taksit())->updateSatisOdeme($id);
+            $satis = $this->db->fetchOne("
+                SELECT st.*, m.ad, m.soyad, m.ad || ' ' || m.soyad AS musteri_adi, m.telefon, m.adres,
+                       c.cihaz_adi, c.marka AS cihaz_marka, c.model AS cihaz_model
+                FROM satislar st
+                JOIN musteriler m ON st.musteri_id=m.id AND m.deleted_at IS NULL
+                LEFT JOIN cihazlar c ON st.cihaz_id=c.id AND c.deleted_at IS NULL
+                WHERE st.id=? AND st.firma_id=? AND st.deleted_at IS NULL
+            ", [$id, $this->firmaId]);
+        }
+
         $satis['kalemler'] = $this->db->fetchAll(
             "SELECT sk.*, p.parca_adi AS stok_adi FROM satis_kalemleri sk
              LEFT JOIN parcalar p ON sk.parca_id=p.id AND p.deleted_at IS NULL
              WHERE sk.satis_id=? AND sk.deleted_at IS NULL", [$id]
         );
         $satis['tahsilatlar'] = $this->db->fetchAll(
-            "SELECT * FROM tahsilatlar WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? ORDER BY created_at DESC",
+            "SELECT * FROM tahsilatlar
+             WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? AND deleted_at IS NULL
+             ORDER BY DATE(tahsilat_tarihi) DESC, id DESC",
             [$id, $this->firmaId]
         );
         $satis['taksitler'] = $this->db->fetchAll(
@@ -61,6 +76,25 @@ class Satis extends Model {
             $taksit['odendi'] = (int)($taksit['odendi'] ?? 0);
         }
         unset($taksit);
+
+        foreach ($satis['taksitler'] as $taksit) {
+            if ((int)($taksit['taksit_no'] ?? -1) === 0 && (float)($taksit['tutar'] ?? 0) > 0) {
+                array_unshift($satis['tahsilatlar'], [
+                    'id' => 'pesinat-' . (int)$taksit['id'],
+                    'firma_id' => $this->firmaId,
+                    'musteri_id' => (int)$satis['musteri_id'],
+                    'kaynak_tip' => 'satis',
+                    'kaynak_id' => (int)$satis['id'],
+                    'taksit_id' => (int)$taksit['id'],
+                    'tutar' => (float)$taksit['tutar'],
+                    'odeme_yontemi' => 'nakit',
+                    'notlar' => 'Peşinat',
+                    'tahsilat_tarihi' => $taksit['odeme_tarihi'] ?: ($taksit['vade_tarihi'] ?? $satis['satis_tarihi']),
+                    'readonly' => true,
+                ]);
+                break;
+            }
+        }
 
         return $satis;
     }

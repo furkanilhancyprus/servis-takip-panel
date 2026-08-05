@@ -23,6 +23,7 @@ switch (method()) {
         $filtre = array_filter([
             'musteri_id'  => $_GET['musteri_id'] ?? null,
             'kaynak_tip'  => $_GET['kaynak_tip'] ?? null,
+            'kaynak_id'   => $_GET['kaynak_id']  ?? null,
             'baslangic'   => $_GET['baslangic']  ?? null,
             'bitis'       => $_GET['bitis']       ?? null,
             'limit'       => $_GET['limit']       ?? 100,
@@ -49,6 +50,12 @@ switch (method()) {
         if ((float)$data['tutar'] < 0 || ($data['kaynak_tip'] !== 'servis' && (float)$data['tutar'] <= 0)) json_err('Geçerli bir tutar girin.');
         $newId = $t->create($data);
         json_ok(['id' => $newId], 'Tahsilat kaydedildi.');
+
+    case 'PUT':
+        if (!$id) json_err('ID gerekli.');
+        $data = get_input();
+        $t->update($id, $data);
+        json_ok(null, 'Tahsilat guncellendi.');
 
     case 'DELETE':
         if (!$id) json_err('ID gerekli.');
