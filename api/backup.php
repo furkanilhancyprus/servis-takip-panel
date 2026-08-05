@@ -20,6 +20,7 @@ $tables = [
     'taksitler',
     'tahsilatlar',
     'musteri_cihazlari',
+    'tedarikciler',
     'tedarikci_alimlari',
     'tedarikci_alim_kalemleri',
     'tedarikci_odemeleri',

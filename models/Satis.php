@@ -269,6 +269,16 @@ class Satis extends Model {
         return $pesinCiro + $taksitCiro;
     }
 
+    public function getSatisHacmiByDateRange(string $baslangic, string $bitis): float {
+        return (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(toplam_tutar),0)
+             FROM satislar
+             WHERE firma_id=? AND deleted_at IS NULL
+               AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $baslangic, $bitis]
+        );
+    }
+
     public function getAdetByDateRange(string $baslangic, string $bitis): int {
         $pesinAdet = (int)$this->db->fetchColumn(
             "SELECT COUNT(*)

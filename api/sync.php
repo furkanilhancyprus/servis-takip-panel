@@ -21,6 +21,7 @@ $tables = [
     'musteri_cihazlari',
     'taksitler',
     'standart_islem_parcalar',
+    'tedarikciler',
     'tedarikci_alimlari',
     'tedarikci_alim_kalemleri',
     'tedarikci_odemeleri',

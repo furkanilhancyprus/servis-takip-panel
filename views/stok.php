@@ -66,8 +66,15 @@ include __DIR__ . '/layout/header.php';
         </button>
     </div>
 
-    <!-- Table -->
+    <!-- Parcalar -->
     <div class="card overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                <i class="fas fa-boxes-stacked text-blue-500"></i>
+                Parçalar
+            </h3>
+            <span class="badge badge-blue" x-text="filteredParcalar.length + ' kayıt'"></span>
+        </div>
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
@@ -90,13 +97,13 @@ include __DIR__ . '/layout/header.php';
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
-                    <template x-if="!loading && filtered.length === 0">
+                    <template x-if="!loading && filteredParcalar.length === 0">
                         <tr><td colspan="10" class="text-center py-10 text-slate-400">
                             <i class="fas fa-boxes-stacked text-3xl mb-2 block text-slate-200"></i>
                             Parça bulunamadı
                         </td></tr>
                     </template>
-                    <template x-for="p in filtered" :key="p.id">
+                    <template x-for="p in filteredParcalar" :key="p.id">
                         <tr>
                             <td>
                                 <div class="flex items-center gap-2">
@@ -142,6 +149,83 @@ include __DIR__ . '/layout/header.php';
                                     </button>
                                     <button class="btn btn-sm btn-danger btn-icon" title="Sil"
                                             @click="deleteParca(p)">
+                                        <i class="fas fa-trash text-red-500 text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Cihazlar -->
+    <div class="card overflow-hidden mt-6">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                <i class="fas fa-microchip text-purple-500"></i>
+                Cihazlar
+            </h3>
+            <span class="badge" style="background:#ede9fe;color:#7c3aed;" x-text="filteredCihazlar.length + ' kayıt'"></span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Cihaz Adı</th>
+                        <th>Marka</th>
+                        <th class="text-center">Stok</th>
+                        <th class="text-center">Kritik Seviye</th>
+                        <th>Satış Fiyatı</th>
+                        <th>Maliyet</th>
+                        <th>Tedarikçi</th>
+                        <th>Durum</th>
+                        <th class="text-right">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="loading">
+                        <tr><td colspan="9" class="text-center py-10 text-slate-400">
+                            <div class="spinner mx-auto mb-2"></div>Yükleniyor...
+                        </td></tr>
+                    </template>
+                    <template x-if="!loading && filteredCihazlar.length === 0">
+                        <tr><td colspan="9" class="text-center py-10 text-slate-400">
+                            <i class="fas fa-microchip text-3xl mb-2 block text-slate-200"></i>
+                            Cihaz bulunamadı
+                        </td></tr>
+                    </template>
+                    <template x-for="p in filteredCihazlar" :key="p.id">
+                        <tr>
+                            <td><span class="font-medium text-slate-800" x-text="p.parca_adi"></span></td>
+                            <td class="text-slate-500" x-text="p.marka || '—'"></td>
+                            <td class="text-center">
+                                <span class="text-lg font-bold"
+                                      :class="isKritik(p) ? 'text-red-600' : 'text-slate-800'"
+                                      x-text="p.stok_miktari"></span>
+                            </td>
+                            <td class="text-center text-slate-400" x-text="p.kritik_stok_seviyesi"></td>
+                            <td class="font-medium text-slate-700" x-text="formatCurrency(p.birim_fiyat)"></td>
+                            <td>
+                                <p class="font-medium text-slate-700" x-text="formatUsd(p.maliyet_usd)"></p>
+                                <p class="text-xs text-slate-400" x-text="doviz.usd_try ? formatCurrency((p.maliyet_usd || 0) * doviz.usd_try) : 'Kur bekleniyor'"></p>
+                            </td>
+                            <td class="text-slate-500 text-sm" x-text="p.tedarikci || '—'"></td>
+                            <td>
+                                <span class="badge"
+                                      :class="isKritik(p) ? 'badge-red' : 'badge-green'"
+                                      x-text="isKritik(p) ? 'Kritik' : 'Normal'"></span>
+                            </td>
+                            <td>
+                                <div class="flex items-center justify-end gap-1">
+                                    <button class="btn btn-sm btn-success btn-icon" title="Stok Girişi" @click="stokGirisi(p)">
+                                        <i class="fas fa-plus text-emerald-600 text-xs"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-secondary btn-icon" title="Düzenle" @click="editParca(p)">
+                                        <i class="fas fa-pen text-blue-500 text-xs"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger btn-icon" title="Sil" @click="deleteParca(p)">
                                         <i class="fas fa-trash text-red-500 text-xs"></i>
                                     </button>
                                 </div>
@@ -274,14 +358,22 @@ function stokApp() {
         form: { parca_adi: '', marka: '', birim_fiyat: 0, maliyet_usd: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false },
         stokForm: { id: null, parca_adi: '', mevcutStok: 0, miktar: 1 },
 
-        get filtered() {
+        get filteredBase() {
             return this.parcalar.filter(p => {
                 const q = this.search.toLowerCase();
                 const match = !q || p.parca_adi.toLowerCase().includes(q) || (p.marka || '').toLowerCase().includes(q);
                 const kritik = !this.sadecekritik || this.isKritik(p);
-                const cihaz = !this.sadececihaz || p.is_cihaz == 1;
-                return match && kritik && cihaz;
+                return match && kritik;
             });
+        },
+
+        get filteredParcalar() {
+            if (this.sadececihaz) return [];
+            return this.filteredBase.filter(p => p.is_cihaz != 1);
+        },
+
+        get filteredCihazlar() {
+            return this.filteredBase.filter(p => p.is_cihaz == 1);
         },
 
         get kritikCount() { return this.parcalar.filter(p => this.isKritik(p)).length; },

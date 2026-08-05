@@ -8,6 +8,9 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 try {
     switch (method()) {
         case 'GET':
+            if (!empty($_GET['suppliers'])) {
+                json_ok($tedarikci->getSuppliers());
+            }
             if ($id > 0) {
                 $row = $tedarikci->getById($id);
                 if (!$row) json_err('Alim kaydi bulunamadi.', 404);
@@ -17,6 +20,10 @@ try {
 
         case 'POST':
             $data = get_input();
+            if (!empty($_GET['suppliers'])) {
+                $newId = $tedarikci->createSupplier($data);
+                json_ok(['id' => $newId], 'Tedarikci kaydedildi.');
+            }
             if (!empty($_GET['odeme'])) {
                 if (!$id) json_err('Alim ID gerekli.');
                 $newId = $tedarikci->odemeEkle($id, $data);
@@ -25,7 +32,20 @@ try {
             $newId = $tedarikci->create($data);
             json_ok(['id' => $newId], 'Tedarikci alimi kaydedildi.');
 
+        case 'PUT':
+            if (!empty($_GET['suppliers'])) {
+                if (!$id) json_err('Tedarikci ID gerekli.');
+                $tedarikci->updateSupplier($id, get_input());
+                json_ok(null, 'Tedarikci guncellendi.');
+            }
+            json_err('Desteklenmeyen metod.', 405);
+
         case 'DELETE':
+            if (!empty($_GET['suppliers'])) {
+                if (!$id) json_err('Tedarikci ID gerekli.');
+                $tedarikci->deleteSupplier($id);
+                json_ok(null, 'Tedarikci silindi.');
+            }
             if (!empty($_GET['odeme'])) {
                 if (!$id) json_err('Odeme ID gerekli.');
                 $tedarikci->odemeSil($id);

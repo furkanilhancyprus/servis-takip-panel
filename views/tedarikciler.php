@@ -7,8 +7,8 @@ include __DIR__ . '/layout/header.php';
 <div x-data="tedarikcilerApp()" x-init="init()" class="space-y-6">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="stat-card">
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Toplam Alım</p>
-            <p class="text-3xl font-bold text-slate-800 mt-1" x-text="alimlar.length"></p>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tedarikçi</p>
+            <p class="text-3xl font-bold text-slate-800 mt-1" x-text="suppliers.length"></p>
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Toplam Borç</p>
@@ -26,6 +26,51 @@ include __DIR__ . '/layout/header.php';
             <button class="btn btn-primary" @click="openForm()">
                 <i class="fas fa-plus"></i> Yeni Alım
             </button>
+        </div>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+            <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                <i class="fas fa-address-book text-blue-500"></i> Tedarikçi Rehberi
+            </h3>
+            <button class="btn btn-secondary" @click="openSupplierForm()">
+                <i class="fas fa-user-plus"></i> Tedarikçi Ekle
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="data-table min-w-[860px]">
+                <thead>
+                    <tr>
+                        <th>Tedarikçi</th>
+                        <th>Yetkili</th>
+                        <th>Telefon</th>
+                        <th>Toplam Alım</th>
+                        <th>Kalan Borç</th>
+                        <th>Not</th>
+                        <th class="text-right">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="!loading && filteredSuppliers.length === 0">
+                        <tr><td colspan="7" class="text-center py-8 text-slate-400">Tedarikçi kaydı yok.</td></tr>
+                    </template>
+                    <template x-for="s in filteredSuppliers" :key="s.id">
+                        <tr>
+                            <td class="font-semibold text-slate-800" x-text="s.ad"></td>
+                            <td class="text-slate-600" x-text="s.yetkili || '—'"></td>
+                            <td class="text-slate-600" x-text="s.telefon || '—'"></td>
+                            <td class="font-semibold text-slate-700" x-text="formatCurrency(s.toplam_alim || 0)"></td>
+                            <td class="font-semibold" :class="Number(s.kalan_borc || 0) > 0 ? 'text-red-600' : 'text-emerald-600'" x-text="formatCurrency(s.kalan_borc || 0)"></td>
+                            <td class="text-slate-500 text-sm" x-text="s.notlar || '—'"></td>
+                            <td class="text-right">
+                                <button class="btn btn-sm btn-secondary btn-icon" @click="editSupplier(s)" title="Düzenle"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-danger btn-icon" @click="deleteSupplier(s)" title="Sil"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -92,7 +137,12 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="form-label">Tedarikçi</label>
-                        <input class="form-input" x-model="form.tedarikci_adi" placeholder="Toptancı adı">
+                        <input class="form-input" x-model="form.tedarikci_adi" list="tedarikciList" placeholder="Toptancı adı">
+                        <datalist id="tedarikciList">
+                            <template x-for="s in suppliers" :key="s.id">
+                                <option :value="s.ad"></option>
+                            </template>
+                        </datalist>
                     </div>
                     <div>
                         <label class="form-label">Fatura No</label>
@@ -154,6 +204,50 @@ include __DIR__ . '/layout/header.php';
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" @click="showForm=false">İptal</button>
                     <button class="btn btn-primary" :disabled="saving"><span x-show="saving" class="spinner w-4 h-4"></span> Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div x-show="showSupplierForm" x-cloak class="modal-backdrop" @click.self="showSupplierForm=false">
+        <div class="modal-box max-w-lg">
+            <div class="modal-header">
+                <h3 class="font-semibold text-slate-800" x-text="supplierEditId ? 'Tedarikçi Düzenle' : 'Tedarikçi Ekle'"></h3>
+                <button @click="showSupplierForm=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            </div>
+            <form @submit.prevent="saveSupplier()" class="modal-body space-y-4" novalidate>
+                <div>
+                    <label class="form-label">Tedarikçi Adı <span class="text-red-500">*</span></label>
+                    <input class="form-input" x-model="supplierForm.ad" placeholder="Toptancı / firma adı">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Yetkili</label>
+                        <input class="form-input" x-model="supplierForm.yetkili">
+                    </div>
+                    <div>
+                        <label class="form-label">Telefon</label>
+                        <input class="form-input" x-model="supplierForm.telefon">
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label">E-posta</label>
+                    <input type="email" class="form-input" x-model="supplierForm.email">
+                </div>
+                <div>
+                    <label class="form-label">Adres</label>
+                    <input class="form-input" x-model="supplierForm.adres">
+                </div>
+                <div>
+                    <label class="form-label">Not</label>
+                    <textarea class="form-textarea" rows="2" x-model="supplierForm.notlar"></textarea>
+                </div>
+                <div class="modal-footer px-0 pb-0">
+                    <button type="button" class="btn btn-secondary" @click="showSupplierForm=false">İptal</button>
+                    <button class="btn btn-primary" :disabled="saving">
+                        <span x-show="saving" class="spinner w-4 h-4"></span>
+                        Kaydet
+                    </button>
                 </div>
             </form>
         </div>
@@ -231,11 +325,17 @@ include __DIR__ . '/layout/header.php';
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function tedarikcilerApp() {
     return {
-        alimlar: [], stoklar: [], loading: false, saving: false, search: '',
-        showForm: false, showDetail: false, detail: null,
+        alimlar: [], stoklar: [], suppliers: [], loading: false, saving: false, search: '',
+        showForm: false, showDetail: false, showSupplierForm: false, detail: null, supplierEditId: null,
         form: { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), kalemler:[], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' },
+        supplierForm: { ad:'', yetkili:'', telefon:'', email:'', adres:'', notlar:'' },
         odemeForm: { tutar:0, odeme_yontemi:'nakit', odeme_tarihi: todayStr(), notlar:'' },
-        async init() { await Promise.all([this.loadAlimlar(), this.loadStoklar()]); },
+        async init() { await Promise.all([this.loadAlimlar(), this.loadStoklar(), this.loadSuppliers()]); },
+        get filteredSuppliers() {
+            const q = this.search.trim().toLocaleLowerCase('tr-TR');
+            if (!q) return this.suppliers;
+            return this.suppliers.filter(s => `${s.ad || ''} ${s.yetkili || ''} ${s.telefon || ''}`.toLocaleLowerCase('tr-TR').includes(q));
+        },
         get filteredAlimlar() {
             const q = this.search.trim().toLocaleLowerCase('tr-TR');
             if (!q) return this.alimlar;
@@ -245,7 +345,35 @@ function tedarikcilerApp() {
         get toplamOdenen() { return this.alimlar.reduce((s,a)=>s+(+a.odenen_tutar||0),0); },
         get toplamAdet() { return this.alimlar.reduce((s,a)=>s+(+a.toplam_adet||0),0); },
         async loadAlimlar() { this.loading = true; try { this.alimlar = await api('api/tedarikciler.php'); } catch(e) {} finally { this.loading = false; } },
+        async loadSuppliers() { try { this.suppliers = await api('api/tedarikciler.php?suppliers=1'); } catch(e) { this.suppliers = []; } },
         async loadStoklar() { try { this.stoklar = await api('api/stok.php'); } catch(e) {} },
+        openSupplierForm() {
+            this.supplierEditId = null;
+            this.supplierForm = { ad:'', yetkili:'', telefon:'', email:'', adres:'', notlar:'' };
+            this.showSupplierForm = true;
+        },
+        editSupplier(s) {
+            this.supplierEditId = s.id;
+            this.supplierForm = { ad:s.ad || '', yetkili:s.yetkili || '', telefon:s.telefon || '', email:s.email || '', adres:s.adres || '', notlar:s.notlar || '' };
+            this.showSupplierForm = true;
+        },
+        async saveSupplier() {
+            if (!this.supplierForm.ad.trim()) { showToast('Tedarikçi adı girin.', 'error'); return; }
+            this.saving = true;
+            try {
+                const url = this.supplierEditId ? `api/tedarikciler.php?suppliers=1&id=${this.supplierEditId}` : 'api/tedarikciler.php?suppliers=1';
+                await api(url, { method: this.supplierEditId ? 'PUT' : 'POST', body: this.supplierForm });
+                showToast(this.supplierEditId ? 'Tedarikçi güncellendi.' : 'Tedarikçi eklendi.', 'success');
+                this.showSupplierForm = false;
+                await this.loadSuppliers();
+            } catch(e) {} finally { this.saving = false; }
+        },
+        async deleteSupplier(s) {
+            if (!confirm(`"${s.ad}" tedarikçisi silinsin mi? Alım kayıtları silinmez.`)) return;
+            await api(`api/tedarikciler.php?suppliers=1&id=${s.id}`, { method:'DELETE' });
+            showToast('Tedarikçi silindi.', 'success');
+            await this.loadSuppliers();
+        },
         openForm() {
             this.form = { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), kalemler:[{ parca_id:'', miktar:1, birim_fiyat:0 }], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' };
             this.showForm = true;

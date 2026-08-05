@@ -40,11 +40,11 @@ include __DIR__ . '/layout/header.php';
         </div>
         <div class="stat-card border-l-4 border-l-red-400">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Önceki Ay Gecikmişler</p>
-            <p class="text-3xl font-bold text-red-600 mt-1" x-text="gecikListe.length"></p>
+            <p class="text-3xl font-bold text-red-600 mt-1" x-text="seciliAy === currentAy ? gecikListe.length : 0"></p>
         </div>
         <div class="stat-card border-l-4 border-l-emerald-400">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Toplam Bekleyen</p>
-            <p class="text-3xl font-bold text-emerald-600 mt-1" x-text="buAyListe.length + gecikListe.length"></p>
+            <p class="text-3xl font-bold text-emerald-600 mt-1" x-text="buAyListe.length + (seciliAy === currentAy ? gecikListe.length : 0)"></p>
         </div>
     </div>
 
@@ -126,7 +126,7 @@ include __DIR__ . '/layout/header.php';
     </div>
 
     <!-- ===== ÖNCEKİ AYLARDAN GECİKMİŞLER ===== -->
-    <div class="card overflow-hidden" x-show="gecikListe.length > 0 || !loading">
+    <div class="card overflow-hidden" x-show="seciliAy === currentAy && (gecikListe.length > 0 || !loading)">
         <div class="flex items-center justify-between px-5 py-4 border-b border-red-100" style="background:#fff5f5;">
             <h3 class="font-semibold text-red-700 flex items-center gap-2">
                 <i class="fas fa-exclamation-triangle text-red-500"></i>
@@ -343,7 +343,7 @@ include __DIR__ . '/layout/header.php';
                             </template>
 
                             <!-- Gecikmişler (önceki ay - sadece ilk günde göster) -->
-                            <template x-if="gun.gun === 1 && gecikListe.length > 0 && !gun.bos">
+                            <template x-if="seciliAy === currentAy && gun.gun === 1 && gecikListe.length > 0 && !gun.bos">
                                 <div class="mt-1">
                                     <template x-for="b in gecikListe" :key="'g'+b.musteri_id">
                                         <div class="mb-0.5 px-1.5 py-0.5 rounded text-xs font-medium truncate cursor-pointer bg-red-100 text-red-700"
@@ -365,7 +365,7 @@ include __DIR__ . '/layout/header.php';
                 <span>Bir müşteriye tıklayarak bakımı tamamlandı olarak işaretleyebilirsiniz.</span>
                 <span>
                     <span class="font-semibold text-blue-600" x-text="buAyListe.length"></span> bu ay,
-                    <span class="font-semibold text-red-600" x-text="gecikListe.length"></span> gecikmiş
+                    <span class="font-semibold text-red-600" x-text="seciliAy === currentAy ? gecikListe.length : 0"></span> gecikmiş
                 </span>
             </div>
         </div>
@@ -381,6 +381,7 @@ function bakimlarApp() {
         loading: false,
         search: '',
         today: new Date().toISOString().slice(0, 10),
+        currentAy: new Date().toISOString().slice(0, 7),
         seciliAy: '<?= date('Y-m') ?>',
         showTakvim: false,
         showAyar: false,
@@ -419,7 +420,7 @@ function bakimlarApp() {
             const q = this.search.toLowerCase();
             return this.liste.filter(b => {
                 if (!b.sonraki_bakim_tarihi) return false;
-                const match = b.sonraki_bakim_tarihi < this.ayBaslangic;
+                const match = b.sonraki_bakim_tarihi < this.today;
                 const searchOk = !q || `${b.ad} ${b.soyad}`.toLowerCase().includes(q) || (b.telefon||'').includes(q);
                 return match && searchOk;
             }).sort((a,b) => a.sonraki_bakim_tarihi.localeCompare(b.sonraki_bakim_tarihi));
@@ -560,9 +561,9 @@ function bakimlarApp() {
         gecikmeAyLabel(dateValue) {
             if (!dateValue) return '—';
             const [dueYear, dueMonth] = String(dateValue).slice(0, 7).split('-').map(Number);
-            const [selectedYear, selectedMonth] = this.seciliAy.split('-').map(Number);
-            if (!dueYear || !dueMonth || !selectedYear || !selectedMonth) return '—';
-            const months = Math.max(1, (selectedYear - dueYear) * 12 + (selectedMonth - dueMonth));
+            const [currentYear, currentMonth] = this.today.slice(0, 7).split('-').map(Number);
+            if (!dueYear || !dueMonth || !currentYear || !currentMonth) return '-';
+            const months = Math.max(1, (currentYear - dueYear) * 12 + (currentMonth - dueMonth));
             return months + ' ay';
         },
 

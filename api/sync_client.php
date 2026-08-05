@@ -63,6 +63,7 @@ function client_tables(): array {
         'servis_islemleri', 'parcalar', 'servis_parcalari', 'satislar',
         'satis_kalemleri', 'tahsilatlar', 'ayarlar', 'cihazlar',
         'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
+        'tedarikciler',
         'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
     ];
 }

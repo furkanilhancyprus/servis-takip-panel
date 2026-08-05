@@ -14,6 +14,46 @@ $bakim    = new PeriyodikBakim();
 $tahsilat = new Tahsilat();
 $satis    = new Satis();
 
+function dashboard_usd_try(): float {
+    if (!empty($_SESSION['dashboard_usd_try_cache']['rate']) && !empty($_SESSION['dashboard_usd_try_cache']['until'])) {
+        if ((int)$_SESSION['dashboard_usd_try_cache']['until'] > time()) {
+            return (float)$_SESSION['dashboard_usd_try_cache']['rate'];
+        }
+    }
+
+    $fetch = function(string $url): ?string {
+        $ctx = stream_context_create([
+            'http' => [
+                'timeout' => 2,
+                'header' => "User-Agent: ServisTakipPanel/1.0\r\n",
+            ],
+        ]);
+        $raw = @file_get_contents($url, false, $ctx);
+        return $raw === false ? null : $raw;
+    };
+
+    $rate = 0.0;
+    $xmlText = $fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
+    if ($xmlText && preg_match('/<Currency[^>]+CurrencyCode="USD"[\s\S]*?<ForexSelling>([^<]+)<\/ForexSelling>/u', $xmlText, $m)) {
+        $rate = (float)str_replace(',', '.', trim($m[1]));
+    }
+
+    if ($rate <= 0) {
+        $json = $fetch('https://open.er-api.com/v6/latest/USD');
+        $data = $json ? json_decode($json, true) : null;
+        $rate = (float)($data['rates']['TRY'] ?? 0);
+    }
+
+    if ($rate > 0) {
+        $_SESSION['dashboard_usd_try_cache'] = [
+            'rate' => $rate,
+            'until' => time() + 21600,
+        ];
+    }
+
+    return $rate;
+}
+
 $yil = isset($_GET['yil']) ? (int)$_GET['yil'] : (int)date('Y');
 $seciliAy = $_GET['ay'] ?? date('Y-m');
 if (!preg_match('/^\d{4}-\d{2}$/', $seciliAy)) {
@@ -29,9 +69,7 @@ $buAyYapilan  = $servis->getBuAyYapilan();
 $kritikStok   = $parca->getKritikStoklar();
 $musteriStats = $musteri->getStats();
 $tahsilOzeti  = $tahsilat->getTahsilOzeti();
-$buAySatis    = $satis->getCiroByDateRange($ayBaslangic, $ayBitis);
-
-$buAyCiro     = array_sum(array_column($buAyYapilan, 'toplam_tutar')) + $buAySatis;
+$usdKur       = dashboard_usd_try();
 
 // Bu ay planlanmış bakım sayısı (gecikmiş olanlar dahil)
 $_db = Database::getInstance();
@@ -63,19 +101,19 @@ $ayServis = $_db->fetchOne("
     WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
 ", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
 
-$satisMaliyet = $satis->getMaliyetByDateRange($ayBaslangic, $ayBitis, 0);
+$satisMaliyet = $satis->getMaliyetByDateRange($ayBaslangic, $ayBitis, $usdKur);
 
 $servisMaliyet = (float)$_db->fetchColumn("
     SELECT COALESCE(SUM(
         sp.miktar
         * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
-        * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE 0 END
+        * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
     ),0)
     FROM servis_parcalari sp
     JOIN servisler s ON s.id=sp.servis_id AND s.deleted_at IS NULL
     LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
     WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
-", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
+", [$usdKur, $_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
 
 $gunSayisi = (int)date('t', strtotime($ayBaslangic));
 $gunlukMap = [];
@@ -142,8 +180,11 @@ foreach ($gunlukServis as $row) {
 }
 
 $aySatisCiro = $satis->getCiroByDateRange($ayBaslangic, $ayBitis);
+$aySatisHacmi = $satis->getSatisHacmiByDateRange($ayBaslangic, $ayBitis);
 $ayServisCiro = (float)($ayServis['ciro'] ?? 0);
-$ayToplamCiro = $aySatisCiro + $ayServisCiro;
+$ayTahakkukCiro = $aySatisCiro + $ayServisCiro;
+$ayIslemHacmi = $aySatisHacmi + $ayServisCiro;
+$ayToplamCiro = $ayTahakkukCiro;
 $ayToplamMaliyet = $satisMaliyet + $servisMaliyet;
 
 json_ok([
@@ -152,7 +193,10 @@ json_ok([
     'yaklasanBakim'    => count($yaklasanlar),
     'bugunServis'      => count($bugunServis),
     'buAyYapilan'      => count($buAyYapilan),
-    'buAyCiro'         => $buAyCiro,
+    'buAyCiro'         => $ayTahakkukCiro,
+    'buAyTahakkukCiro' => $ayTahakkukCiro,
+    'buAySatisHacmi'   => $aySatisHacmi,
+    'buAyIslemHacmi'   => $ayIslemHacmi,
     'kritikStok'       => count($kritikStok),
     'stokDegeri'       => $parca->getTotalValue(),
     'buAyPlanlanan'    => $buAyPlanlanan,
@@ -164,6 +208,7 @@ json_ok([
     'haftalikCiro'     => $servis->getHaftalikCiro(),
     'aylikCiro'        => $aylikCiro,
     'aylikTahsilat'    => $aylikTahsilat,
+    'usd_try'          => $usdKur,
     'seciliAy'         => $seciliAy,
     'ayOzeti'          => [
         'baslangic' => $ayBaslangic,
@@ -171,10 +216,14 @@ json_ok([
         'satis_adet' => $aySatisAdet,
         'servis_adet' => (int)($ayServis['adet'] ?? 0),
         'satis_ciro' => $aySatisCiro,
+        'satis_hacmi' => $aySatisHacmi,
         'servis_ciro' => $ayServisCiro,
-        'toplam_ciro' => $ayToplamCiro,
+        'tahakkuk_ciro' => $ayTahakkukCiro,
+        'islem_hacmi' => $ayIslemHacmi,
+        'toplam_ciro' => $ayTahakkukCiro,
         'toplam_maliyet' => $ayToplamMaliyet,
-        'net_kar' => $ayToplamCiro - $ayToplamMaliyet,
+        'net_kar' => $ayTahakkukCiro - $ayToplamMaliyet,
+        'usd_try' => $usdKur,
     ],
     'gunlukAyCiro'     => array_values($gunlukMap),
 ]);

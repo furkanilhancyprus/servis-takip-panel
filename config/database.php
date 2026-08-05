@@ -331,6 +331,20 @@ class Database {
                 FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS tedarikciler (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                firma_id          INTEGER NOT NULL DEFAULT 0,
+                ad                TEXT NOT NULL,
+                yetkili           TEXT,
+                telefon           TEXT,
+                email             TEXT,
+                adres             TEXT,
+                notlar            TEXT,
+                created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS tedarikci_alim_kalemleri (
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 alim_id           INTEGER NOT NULL,
@@ -475,7 +489,7 @@ class Database {
             'servisler', 'servis_islemleri', 'parcalar', 'servis_parcalari',
             'satislar', 'satis_kalemleri', 'tahsilatlar', 'ayarlar',
             'cihazlar', 'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
-            'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
+            'tedarikciler', 'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
         ];
         foreach ($syncTables as $table) {
             $extraMigrations[] = [$table, 'uuid', "ALTER TABLE {$table} ADD COLUMN uuid TEXT"];
@@ -719,7 +733,7 @@ class Database {
             'servisler', 'servis_islemleri', 'parcalar', 'servis_parcalari',
             'satislar', 'satis_kalemleri', 'tahsilatlar', 'ayarlar',
             'cihazlar', 'musteri_cihazlari', 'taksitler', 'standart_islem_parcalar',
-            'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
+            'tedarikciler', 'tedarikci_alimlari', 'tedarikci_alim_kalemleri', 'tedarikci_odemeleri',
         ];
 
         foreach ($tables as $table) {

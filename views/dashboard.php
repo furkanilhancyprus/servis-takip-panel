@@ -38,9 +38,10 @@ include __DIR__ . '/layout/header.php';
         <div class="stat-card">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Ciro</p>
-                    <p class="text-xl font-bold text-purple-600 mt-1" x-text="formatCurrency(stats.buAyCiro)"></p>
-                    <p class="text-xs text-slate-400 mt-0.5">Servis + Satış</p>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Tahakkuk</p>
+                    <p class="text-xl font-bold text-purple-600 mt-1" x-text="formatCurrency(stats.buAyTahakkukCiro ?? stats.buAyCiro)"></p>
+                    <p class="text-xs text-slate-400 mt-0.5">Vade/taksit + servis</p>
+                    <p class="text-xs text-slate-500 mt-1" x-text="'Satış hacmi: ' + formatCurrency(stats.buAyIslemHacmi || 0)"></p>
                     <a href="?page=raporlar" class="text-xs text-purple-600 hover:underline mt-2 inline-block">İncele →</a>
                 </div>
                 <div class="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
@@ -219,10 +220,11 @@ include __DIR__ . '/layout/header.php';
                 <div>
                     <h3 class="font-semibold text-slate-800">Aylık Ciro & Kar</h3>
                     <p class="text-xs text-slate-400 mt-0.5" x-text="ayLabel + ' özeti'"></p>
+                    <p class="text-xs text-slate-500 mt-1">Tahakkuk vadeye göre, satış hacmi satış tarihine göre hesaplanır.</p>
                 </div>
                 <input type="month" class="form-input w-40 text-xs py-1.5" x-model="seciliAy" @change="loadDashboard()">
             </div>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                 <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
                     <p class="text-xs text-blue-500 font-semibold uppercase">Satış</p>
                     <p class="text-2xl font-bold text-blue-700 mt-1" x-text="ayOzeti.satis_adet || 0"></p>
@@ -232,16 +234,28 @@ include __DIR__ . '/layout/header.php';
                     <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="ayOzeti.servis_adet || 0"></p>
                 </div>
                 <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
-                    <p class="text-xs text-slate-500 font-semibold uppercase">Toplam Ciro</p>
-                    <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(ayOzeti.toplam_ciro || 0)"></p>
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Tahakkuk Ciro</p>
+                    <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(ayOzeti.tahakkuk_ciro || ayOzeti.toplam_ciro || 0)"></p>
+                </div>
+                <div class="rounded-lg bg-purple-50 border border-purple-100 p-3">
+                    <p class="text-xs text-purple-500 font-semibold uppercase">Satış Hacmi</p>
+                    <p class="text-lg font-bold text-purple-700 mt-1" x-text="formatCurrency(ayOzeti.islem_hacmi || 0)"></p>
+                </div>
+                <div class="rounded-lg bg-orange-50 border border-orange-100 p-3">
+                    <p class="text-xs text-orange-600 font-semibold uppercase">Maliyet</p>
+                    <p class="text-lg font-bold text-orange-700 mt-1" x-text="formatCurrency(ayOzeti.toplam_maliyet || 0)"></p>
                 </div>
                 <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
                     <p class="text-xs text-amber-600 font-semibold uppercase">Net Kar</p>
                     <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
                 </div>
             </div>
-            <div class="relative h-56 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-                <canvas id="dailyCiroChart" class="block w-full h-full"></canvas>
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-xs font-semibold text-slate-500 uppercase">Günlük Tahakkuk Dağılımı</p>
+                <p class="text-xs text-slate-400" x-show="ayOzeti.usd_try" x-text="'USD: ' + Number(ayOzeti.usd_try || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ₺'"></p>
+            </div>
+            <div class="relative h-36 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+                <canvas id="dailyCiroChart" class="block w-full h-full" x-show="maxGunlukCiro > 0"></canvas>
                 <div x-show="chartError"
                      class="absolute inset-0 flex items-center justify-center text-sm text-red-500 bg-white/80 pointer-events-none"
                      x-text="chartError"></div>
@@ -343,7 +357,7 @@ function dashboardApp() {
                 data: {
                     labels: this.gunlukAyCiro.map(g => String(g.gun)),
                     datasets: [{
-                        label: 'Günlük Ciro',
+                        label: 'Günlük Tahakkuk',
                         data: this.gunlukAyCiro.map(g => Number(g.ciro || 0)),
                         backgroundColor: this.gunlukAyCiro.map(g => Number(g.ciro || 0) > 0 ? '#2563eb' : 'rgba(148,163,184,.22)'),
                         hoverBackgroundColor: '#1d4ed8',
@@ -363,7 +377,7 @@ function dashboardApp() {
                                     const row = this.gunlukAyCiro[items[0].dataIndex] || {};
                                     return formatDate(row.tarih);
                                 },
-                                label: item => `Ciro: ${formatCurrency(item.raw)}`,
+                                label: item => `Tahakkuk: ${formatCurrency(item.raw)}`,
                                 afterBody: items => {
                                     const row = this.gunlukAyCiro[items[0].dataIndex] || {};
                                     return [

@@ -2,6 +2,74 @@
 require_once __DIR__ . '/Model.php';
 
 class Tedarikci extends Model {
+    public function getSuppliers(): array {
+        return $this->db->fetchAll("
+            SELECT t.*,
+                   COUNT(a.id) AS alim_sayisi,
+                   COALESCE(SUM(a.toplam_tutar),0) AS toplam_alim,
+                   COALESCE(SUM(a.odenen_tutar),0) AS toplam_odenen,
+                   COALESCE(SUM(a.toplam_tutar - a.odenen_tutar),0) AS kalan_borc
+            FROM tedarikciler t
+            LEFT JOIN tedarikci_alimlari a
+              ON a.firma_id=t.firma_id
+             AND a.deleted_at IS NULL
+             AND LOWER(a.tedarikci_adi)=LOWER(t.ad)
+            WHERE t.firma_id=? AND t.deleted_at IS NULL
+            GROUP BY t.id
+            ORDER BY t.ad ASC
+        ", [$this->firmaId]);
+    }
+
+    public function createSupplier(array $data): int {
+        $ad = trim((string)($data['ad'] ?? ''));
+        if ($ad === '') {
+            throw new InvalidArgumentException('Tedarikci adi zorunludur.');
+        }
+        return $this->db->execute("
+            INSERT INTO tedarikciler (firma_id, ad, yetkili, telefon, email, adres, notlar, uuid)
+            VALUES (?,?,?,?,?,?,?,?)
+        ", [
+            $this->firmaId,
+            $ad,
+            trim((string)($data['yetkili'] ?? '')) ?: null,
+            trim((string)($data['telefon'] ?? '')) ?: null,
+            trim((string)($data['email'] ?? '')) ?: null,
+            trim((string)($data['adres'] ?? '')) ?: null,
+            trim((string)($data['notlar'] ?? '')) ?: null,
+            $this->uuid(),
+        ]);
+    }
+
+    public function updateSupplier(int $id, array $data): void {
+        $ad = trim((string)($data['ad'] ?? ''));
+        if ($ad === '') {
+            throw new InvalidArgumentException('Tedarikci adi zorunludur.');
+        }
+        $this->db->query("
+            UPDATE tedarikciler
+            SET ad=?, yetkili=?, telefon=?, email=?, adres=?, notlar=?, updated_at=?, synced_at=NULL
+            WHERE id=? AND firma_id=? AND deleted_at IS NULL
+        ", [
+            $ad,
+            trim((string)($data['yetkili'] ?? '')) ?: null,
+            trim((string)($data['telefon'] ?? '')) ?: null,
+            trim((string)($data['email'] ?? '')) ?: null,
+            trim((string)($data['adres'] ?? '')) ?: null,
+            trim((string)($data['notlar'] ?? '')) ?: null,
+            $this->now(),
+            $id,
+            $this->firmaId,
+        ]);
+    }
+
+    public function deleteSupplier(int $id): void {
+        $this->db->query("
+            UPDATE tedarikciler
+            SET deleted_at=?, updated_at=?, synced_at=NULL
+            WHERE id=? AND firma_id=? AND deleted_at IS NULL
+        ", [$this->now(), $this->now(), $id, $this->firmaId]);
+    }
+
     public function getAll(): array {
         return $this->db->fetchAll("
             SELECT a.*,
