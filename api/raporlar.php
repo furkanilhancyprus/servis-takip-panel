@@ -314,6 +314,109 @@ switch ($tip) {
         ], JSON_UNESCAPED_UNICODE);
         exit;
 
+    case 'gunluk_trend':
+        header('Content-Type: application/json; charset=utf-8');
+        $db = Database::getInstance();
+        $fid = $_SESSION['firma_id'];
+        $ay = $_GET['ay'] ?? date('Y-m');
+        if (!preg_match('/^\d{4}-\d{2}$/', $ay)) {
+            $ay = date('Y-m');
+        }
+        $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
+        $satisModel = new Satis();
+        $ayBaslangic = $ay . '-01';
+        $ayBitis = date('Y-m-t', strtotime($ayBaslangic));
+        $gunSayisi = (int)date('t', strtotime($ayBaslangic));
+
+        $rows = [];
+        $ozet = [
+            'toplam_ciro' => 0.0,
+            'tahsilat' => 0.0,
+            'net_kar' => 0.0,
+            'satis_adet' => 0,
+            'servis_adet' => 0,
+            'toplam_maliyet' => 0.0,
+        ];
+
+        for ($gun = 1; $gun <= $gunSayisi; $gun++) {
+            $gunNo = str_pad((string)$gun, 2, '0', STR_PAD_LEFT);
+            $tarihGun = "{$ay}-{$gunNo}";
+
+            $servis = $db->fetchOne("
+                SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
+                FROM servisler
+                WHERE firma_id=? AND deleted_at IS NULL AND DATE(tamamlanma_tarihi)=DATE(?)
+            ", [$fid, $tarihGun]);
+
+            $tahsilat = (float)$db->fetchColumn("
+                SELECT COALESCE(SUM(tutar),0)
+                FROM tahsilatlar
+                WHERE firma_id=? AND deleted_at IS NULL
+                  AND DATE(tahsilat_tarihi)=DATE(?)
+                  AND DATE(tahsilat_tarihi) <= DATE('now')
+            ", [$fid, $tarihGun]);
+
+            $satisMaliyet = $satisModel->getMaliyetByDateRange($tarihGun, $tarihGun, $usdKur);
+            $servisMaliyet = (float)$db->fetchColumn("
+                SELECT COALESCE(SUM(
+                    sp.miktar
+                    * COALESCE(NULLIF(sp.birim_maliyet_usd, 0), p.maliyet_usd, 0)
+                    * CASE WHEN COALESCE(sp.usd_kur, 0) > 0 THEN sp.usd_kur ELSE ? END
+                ),0)
+                FROM servis_parcalari sp
+                JOIN servisler s ON s.id=sp.servis_id AND s.deleted_at IS NULL
+                LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
+                WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi)=DATE(?)
+            ", [$usdKur, $fid, $tarihGun]);
+
+            $satisCiro = $satisModel->getCiroByDateRange($tarihGun, $tarihGun);
+            $servisCiro = (float)($servis['ciro'] ?? 0);
+            $toplamCiro = $satisCiro + $servisCiro;
+            $toplamMaliyet = $satisMaliyet + $servisMaliyet;
+            $satisAdet = (int)$db->fetchColumn("
+                SELECT COUNT(*)
+                FROM satislar
+                WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi)=DATE(?)
+            ", [$fid, $tarihGun]);
+            $servisAdet = (int)($servis['adet'] ?? 0);
+            $netKar = $toplamCiro - $toplamMaliyet;
+
+            $rows[] = [
+                'key' => $tarihGun,
+                'gun' => $gunNo,
+                'label' => $gunNo,
+                'tarih' => $tarihGun,
+                'satis_adet' => $satisAdet,
+                'servis_adet' => $servisAdet,
+                'satis_ciro' => $satisCiro,
+                'servis_ciro' => $servisCiro,
+                'toplam_ciro' => $toplamCiro,
+                'tahsilat' => $tahsilat,
+                'toplam_maliyet' => $toplamMaliyet,
+                'net_kar' => $netKar,
+            ];
+
+            $ozet['toplam_ciro'] += $toplamCiro;
+            $ozet['tahsilat'] += $tahsilat;
+            $ozet['net_kar'] += $netKar;
+            $ozet['satis_adet'] += $satisAdet;
+            $ozet['servis_adet'] += $servisAdet;
+            $ozet['toplam_maliyet'] += $toplamMaliyet;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'ay' => $ay,
+                'baslangic' => $ayBaslangic,
+                'bitis' => $ayBitis,
+                'usd_try' => $usdKur,
+                'gunler' => $rows,
+                'ozet' => $ozet,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+
     case 'kar_ozet':
         header('Content-Type: application/json; charset=utf-8');
         $db = Database::getInstance();
@@ -355,7 +458,7 @@ switch ($tip) {
                 'baslangic' => $baslangic,
                 'bitis' => $bitis,
                 'usd_try' => $usdKur,
-                'satis_adet' => $satisModel->getAdetByDateRange($baslangic, $bitis),
+                'satis_adet' => $satisModel->getGercekAdetByDateRange($baslangic, $bitis),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
                 'satis_ciro' => $satisCiro,
                 'servis_ciro' => $servisCiro,

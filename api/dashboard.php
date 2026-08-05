@@ -55,7 +55,7 @@ for ($i = 0; $i < 12; $i++) {
 // Aylık tahsilat
 $aylikTahsilat = $tahsilat->getAylikTahsilat($yil);
 
-$aySatisAdet = $satis->getAdetByDateRange($ayBaslangic, $ayBitis);
+$aySatisAdet = $satis->getGercekAdetByDateRange($ayBaslangic, $ayBitis);
 
 $ayServis = $_db->fetchOne("
     SELECT COUNT(*) AS adet, COALESCE(SUM(toplam_tutar),0) AS ciro
@@ -91,29 +91,12 @@ for ($gun = 1; $gun <= $gunSayisi; $gun++) {
 }
 
 $gunlukSatisAdet = $_db->fetchAll("
-    SELECT tarih, SUM(adet) AS adet
-    FROM (
-        SELECT DATE(satis_tarihi) AS tarih, COUNT(*) AS adet
-        FROM satislar
-        WHERE firma_id=? AND deleted_at IS NULL AND odeme_turu <> 'taksitli'
-          AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
-        GROUP BY DATE(satis_tarihi)
-        UNION ALL
-        SELECT tarih, COUNT(*) AS adet
-        FROM (
-            SELECT DATE(t.vade_tarihi) AS tarih, s.id
-            FROM taksitler t
-            JOIN satislar s ON s.id=t.satis_id AND s.deleted_at IS NULL
-            WHERE s.firma_id=? AND t.firma_id=? AND t.deleted_at IS NULL
-              AND s.odeme_turu='taksitli'
-              AND t.taksit_no > 0
-              AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
-            GROUP BY DATE(t.vade_tarihi), s.id
-        )
-        GROUP BY tarih
-    )
-    GROUP BY tarih
-", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis, $_SESSION['firma_id'], $_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
+    SELECT DATE(satis_tarihi) AS tarih, COUNT(*) AS adet
+    FROM satislar
+    WHERE firma_id=? AND deleted_at IS NULL
+      AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
+    GROUP BY DATE(satis_tarihi)
+", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
 foreach ($gunlukSatisAdet as $row) {
     $tarih = $row['tarih'];
     if (!isset($gunlukMap[$tarih])) continue;

@@ -211,7 +211,7 @@ include __DIR__ . '/layout/header.php';
     </div>
 
     <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         <!-- Aylık Ciro & Kar -->
         <div class="card p-5">
@@ -240,7 +240,7 @@ include __DIR__ . '/layout/header.php';
                     <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
                 </div>
             </div>
-            <div class="relative h-72 min-h-72">
+            <div class="relative h-56 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
                 <canvas id="dailyCiroChart" class="block w-full h-full"></canvas>
                 <div x-show="chartError"
                      class="absolute inset-0 flex items-center justify-center text-sm text-red-500 bg-white/80 pointer-events-none"

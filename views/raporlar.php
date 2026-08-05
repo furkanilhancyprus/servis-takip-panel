@@ -229,13 +229,20 @@ include __DIR__ . '/layout/header.php';
 
     <!-- Servis Trend Grafiği -->
     <div class="card p-5">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-slate-800">Aylık Servis & Ciro Trendi</h3>
-            <select class="form-select w-24 text-xs py-1.5" x-model="trendYil" @change="loadTrend()">
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-                <option value="2024">2024</option>
-            </select>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h3 class="font-semibold text-slate-800" x-text="trendMode === 'aylik' ? 'Günlük Servis & Ciro Trendi' : 'Aylık Servis & Ciro Trendi'"></h3>
+            <div class="flex flex-wrap items-center gap-2">
+                <select class="form-select text-xs py-1.5 w-28" x-model="trendMode" @change="loadTrend()">
+                    <option value="yillik">Yıllık</option>
+                    <option value="aylik">Aylık</option>
+                </select>
+                <select x-show="trendMode === 'yillik'" class="form-select w-24 text-xs py-1.5" x-model="trendYil" @change="loadTrend()">
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                </select>
+                <input x-show="trendMode === 'aylik'" type="month" class="form-input text-xs py-1.5 w-36" x-model="trendAy" @change="loadTrend()">
+            </div>
         </div>
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
             <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
@@ -269,7 +276,7 @@ include __DIR__ . '/layout/header.php';
             <table class="data-table text-sm">
                 <thead>
                     <tr>
-                        <th>Ay</th>
+                        <th x-text="trendMode === 'aylik' ? 'Gün' : 'Ay'"></th>
                         <th>Satış</th>
                         <th>Servis</th>
                         <th>Ciro</th>
@@ -279,7 +286,7 @@ include __DIR__ . '/layout/header.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="row in trendData" :key="row.ay">
+                    <template x-for="row in trendData" :key="row.key || row.ay">
                         <tr>
                             <td class="font-medium text-slate-700" x-text="row.label"></td>
                             <td x-text="row.satis_adet"></td>
@@ -304,7 +311,9 @@ function raporlarApp() {
         karOzet: {},
         trendData: [],
         trendSummary: null,
+        trendMode: 'yillik',
         trendYil: '<?= date('Y') ?>',
+        trendAy: '<?= date('Y-m') ?>',
         trendChart: null,
         trendChartError: '',
         servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
@@ -348,15 +357,33 @@ function raporlarApp() {
         async loadTrend() {
             try {
                 const p = new URLSearchParams({
-                    tip: 'aylik_trend',
-                    yil: this.trendYil,
+                    tip: this.trendMode === 'aylik' ? 'gunluk_trend' : 'aylik_trend',
                     usd_try: this.doviz.usd_try || 0,
                 });
+                if (this.trendMode === 'aylik') {
+                    p.set('ay', this.trendAy);
+                } else {
+                    p.set('yil', this.trendYil);
+                }
                 const d = await api(`api/raporlar.php?${p}`);
-                this.trendData = d.aylar || [];
+                this.trendData = this.trendMode === 'aylik' ? (d.gunler || []) : (d.aylar || []);
                 this.trendSummary = d.ozet || null;
                 this.$nextTick(() => this.renderTrend());
             } catch(e) {}
+        },
+
+        trendTooltipTitle(row) {
+            return this.trendMode === 'aylik'
+                ? `${row.label} ${this.formatMonthLabel(this.trendAy)}`
+                : `${row.label} ${this.trendYil}`;
+        },
+
+        formatMonthLabel(value) {
+            if (!value) return '';
+            const [year, month] = value.split('-');
+            const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+            const index = Number(month) - 1;
+            return `${monthNames[index] || month} ${year}`;
         },
 
         get trendOzet() {
@@ -432,7 +459,7 @@ function raporlarApp() {
                             callbacks: {
                                 title: items => {
                                     const row = this.trendData[items[0].dataIndex] || {};
-                                    return `${row.label} ${this.trendYil}`;
+                                    return this.trendTooltipTitle(row);
                                 },
                                 label: item => `${item.dataset.label}: ${formatCurrency(item.raw)}`,
                                 afterBody: items => {
@@ -526,7 +553,7 @@ function raporlarApp() {
                 callbacks: {
                     title: items => {
                         const row = this.trendData[items[0].dataIndex] || {};
-                        return `${row.label} ${this.trendYil}`;
+                        return this.trendTooltipTitle(row);
                     },
                     label: item => `${item.dataset.label}: ${formatCurrency(item.raw)}`,
                     afterBody: items => {

@@ -473,7 +473,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="text-white text-xs font-semibold truncate"><?= htmlspecialchars($_headerFirma) ?></div>
                     <?php if (!$_desktopMod): ?>
-                    <div class="text-slate-500 text-xs truncate"><?= htmlspecialchars($_SESSION['firma_adi'] ?? '') ?></div>
+                    <div class="text-slate-500 text-xs truncate"><?= htmlspecialchars($_SESSION['email'] ?? '') ?></div>
                     <?php endif; ?>
                 </div>
                 <?php if (!$_desktopMod): ?>

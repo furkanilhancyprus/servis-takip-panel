@@ -293,6 +293,16 @@ class Satis extends Model {
         return $pesinAdet + $taksitliAdet;
     }
 
+    public function getGercekAdetByDateRange(string $baslangic, string $bitis): int {
+        return (int)$this->db->fetchColumn(
+            "SELECT COUNT(*)
+             FROM satislar
+             WHERE firma_id=? AND deleted_at IS NULL
+               AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)",
+            [$this->firmaId, $baslangic, $bitis]
+        );
+    }
+
     public function getMaliyetByDateRange(string $baslangic, string $bitis, float $usdKur = 0): float {
         $pesinMaliyet = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(

@@ -80,6 +80,43 @@ require_once ROOT . '/views/layout/header.php';
         </p>
     </div>
 
+    <!-- Hesap Bilgileri -->
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <i class="fas fa-user-shield text-blue-500"></i> Hesap Bilgileri
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label">Ad Soyad</label>
+                <input type="text" class="form-input" x-model="hesapForm.ad_soyad">
+            </div>
+            <div>
+                <label class="form-label">Giris E-postasi</label>
+                <input type="email" class="form-input" x-model="hesapForm.email">
+            </div>
+            <div>
+                <label class="form-label">Mevcut Sifre</label>
+                <input type="password" class="form-input" x-model="hesapForm.mevcut_sifre" autocomplete="current-password">
+            </div>
+            <div>
+                <label class="form-label">Yeni Sifre</label>
+                <input type="password" class="form-input" x-model="hesapForm.yeni_sifre" autocomplete="new-password" placeholder="Degistirmeyecekseniz bos birakin">
+            </div>
+            <div>
+                <label class="form-label">Yeni Sifre Tekrar</label>
+                <input type="password" class="form-input" x-model="hesapForm.yeni_sifre2" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="flex justify-end mt-4">
+            <button class="btn btn-secondary" @click="saveHesap()" :disabled="accountSaving">
+                <span x-show="accountSaving" class="spinner w-4 h-4"></span>
+                <i x-show="!accountSaving" class="fas fa-user-check"></i>
+                Hesabi Kaydet
+            </button>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">E-posta veya sifre degisikliginde mevcut sifrenizi girmeniz gerekir.</p>
+    </div>
+
     <!-- Firma Bilgileri -->
     <div class="card p-6">
         <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -349,6 +386,8 @@ function ayarlarApp() {
                    varsayilan_bakim_periyodu:6, varsayilan_hatirlatma_gun:7, varsayilan_periyodik_islem_id:'',
                    firma_vergi_no:'', firma_iban:'', fatura_notu:'', fatura_logo:'' },
         islemler: [], cihazlar: [], stoklar: [], saving: false,
+        accountSaving: false,
+        hesapForm: { ad_soyad:'', email:'', mevcut_sifre:'', yeni_sifre:'', yeni_sifre2:'' },
         showIslemModal: false, islemEditId: null,
         islemForm: { islem_adi:'', varsayilan_fiyat:0, parcalar:[] },
         showCihazModal: false, cihazEditId: null,
@@ -365,7 +404,7 @@ function ayarlarApp() {
         },
 
         async init() {
-            await Promise.all([this.loadAyarlar(), this.loadIslemler(), this.loadCihazlar(), this.loadStoklar(), this.loadSyncStatus()]);
+            await Promise.all([this.loadAyarlar(), this.loadHesap(), this.loadIslemler(), this.loadCihazlar(), this.loadStoklar(), this.loadSyncStatus()]);
         },
 
         async loadSyncStatus() {
@@ -452,13 +491,46 @@ function ayarlarApp() {
                 if(d.success && d.data) this.ayarlar={...this.ayarlar,...d.data};
             } catch(e) {}
         },
+        async loadHesap() {
+            try {
+                const r=await fetch('api/hesap.php'); const d=await r.json();
+                if(d.success && d.data) {
+                    this.hesapForm = {
+                        ...this.hesapForm,
+                        ad_soyad: d.data.ad_soyad || '',
+                        email: d.data.email || '',
+                        mevcut_sifre: '',
+                        yeni_sifre: '',
+                        yeni_sifre2: '',
+                    };
+                }
+            } catch(e) {}
+        },
         async saveAyarlar() {
             this.saving=true;
             try {
                 const r=await fetch('api/ayarlar.php',{method:'POST',headers:this.csrfHeaders(),body:JSON.stringify(this.ayarlar)});
                 const d=await r.json();
-                if(d.success) showToast('Ayarlar kaydedildi.','success'); else showToast(d.message??'Hata!','error');
+                if(d.success) {
+                    showToast('Ayarlar kaydedildi.','success');
+                    setTimeout(() => window.location.reload(), 500);
+                } else showToast(d.message??'Hata!','error');
             } catch(e){ showToast('Sunucu hatası!','error'); } finally{ this.saving=false; }
+        },
+
+        async saveHesap() {
+            this.accountSaving=true;
+            try {
+                const r=await fetch('api/hesap.php',{method:'POST',headers:this.csrfHeaders(),body:JSON.stringify(this.hesapForm)});
+                const d=await r.json();
+                if(d.success) {
+                    showToast('Hesap bilgileri kaydedildi.','success');
+                    this.hesapForm.mevcut_sifre='';
+                    this.hesapForm.yeni_sifre='';
+                    this.hesapForm.yeni_sifre2='';
+                    setTimeout(() => window.location.reload(), 500);
+                } else showToast(d.message??'Hata!','error');
+            } catch(e){ showToast('Sunucu hatasi!','error'); } finally{ this.accountSaving=false; }
         },
 
         async loadStoklar() {
