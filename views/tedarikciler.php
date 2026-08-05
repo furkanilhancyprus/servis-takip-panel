@@ -40,7 +40,7 @@ include __DIR__ . '/layout/header.php';
             </button>
         </div>
         <div class="overflow-x-auto">
-            <table>
+            <table class="data-table min-w-[920px]">
                 <thead>
                     <tr>
                         <th>Tarih</th>
