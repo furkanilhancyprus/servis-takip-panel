@@ -102,10 +102,15 @@ class FinansRapor extends Model {
                    m.ad || ' ' || m.soyad AS musteri_adi, m.telefon,
                    COALESCE(k.kalemler, NULLIF(TRIM(COALESCE(c.marka, '') || ' ' || COALESCE(c.cihaz_adi, '')), ''), 'Satis') AS aciklama,
                    t.tutar AS ciro,
-                   CASE WHEN s.toplam_tutar > 0 THEN
-                       (CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END)
-                       * t.tutar / s.toplam_tutar
-                   ELSE 0 END AS maliyet,
+                   CASE
+                       WHEN DATE(t.vade_tarihi) = (
+                           SELECT MIN(DATE(t2.vade_tarihi))
+                           FROM taksitler t2
+                           WHERE t2.satis_id=s.id AND t2.firma_id=s.firma_id AND t2.deleted_at IS NULL
+                       )
+                       THEN CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END
+                       ELSE 0
+                   END AS maliyet,
                    COALESCE(th.tahsilat, 0) AS tahsilat,
                    s.notlar
             FROM taksitler t

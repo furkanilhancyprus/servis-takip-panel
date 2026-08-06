@@ -17,4 +17,5 @@ android/release-key.jks
 *.db
 *.db-wal
 *.db-shm
+database/backups/
 .env

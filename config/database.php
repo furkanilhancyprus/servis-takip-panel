@@ -2,6 +2,8 @@
 class Database {
     private static ?Database $instance = null;
     private PDO $pdo;
+    private string $dbDir;
+    private string $dbPath;
 
     private function __construct() {
         // Masaüstü uygulamada DB kullanıcının AppData klasöründe tutulur
@@ -13,6 +15,8 @@ class Database {
             $dbDir  = __DIR__ . '/../database';
         }
         $dbPath = $dbDir . '/musteri-takip.db';
+        $this->dbDir = $dbDir;
+        $this->dbPath = $dbPath;
 
         if (!is_dir($dbDir)) {
             mkdir($dbDir, 0755, true);
@@ -27,6 +31,7 @@ class Database {
         $this->initTables();
         $this->runMigrations();
         $this->ensureSyncMetadata();
+        $this->ensureWeeklyBackup();
     }
 
     public static function getInstance(): Database {
@@ -65,6 +70,69 @@ class Database {
 
     public function lastInsertId(): string {
         return $this->pdo->lastInsertId();
+    }
+
+    public function getWeeklyBackups(): array {
+        $backupDir = $this->dbDir . DIRECTORY_SEPARATOR . 'backups';
+        $files = glob($backupDir . DIRECTORY_SEPARATOR . 'weekly-*.db') ?: [];
+        usort($files, static fn($a, $b) => filemtime($b) <=> filemtime($a));
+
+        return array_map(static function ($file) {
+            return [
+                'name' => basename($file),
+                'path' => $file,
+                'size_mb' => round(filesize($file) / 1024 / 1024, 2),
+                'created_at' => date('Y-m-d H:i:s', filemtime($file)),
+            ];
+        }, $files);
+    }
+
+    private function ensureWeeklyBackup(): void {
+        if (getenv('STP_DISABLE_AUTO_BACKUP')) {
+            return;
+        }
+
+        $backupDir = $this->dbDir . DIRECTORY_SEPARATOR . 'backups';
+        if (!is_dir($backupDir) && !@mkdir($backupDir, 0755, true) && !is_dir($backupDir)) {
+            return;
+        }
+
+        $target = $backupDir . DIRECTORY_SEPARATOR . 'weekly-' . date('o-\WW') . '.db';
+        if (is_file($target) || !is_file($this->dbPath)) {
+            $this->pruneWeeklyBackups($backupDir);
+            return;
+        }
+
+        $lockFile = $backupDir . DIRECTORY_SEPARATOR . '.weekly-backup.lock';
+        $lock = @fopen($lockFile, 'c');
+        if (!$lock) {
+            return;
+        }
+
+        if (!@flock($lock, LOCK_EX | LOCK_NB)) {
+            @fclose($lock);
+            return;
+        }
+
+        try {
+            clearstatcache(true, $target);
+            if (!is_file($target)) {
+                $this->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+                @copy($this->dbPath, $target);
+            }
+            $this->pruneWeeklyBackups($backupDir);
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+    }
+
+    private function pruneWeeklyBackups(string $backupDir): void {
+        $files = glob($backupDir . DIRECTORY_SEPARATOR . 'weekly-*.db') ?: [];
+        usort($files, static fn($a, $b) => filemtime($b) <=> filemtime($a));
+        foreach (array_slice($files, 4) as $oldFile) {
+            @unlink($oldFile);
+        }
     }
 
     private function initTables(): void {

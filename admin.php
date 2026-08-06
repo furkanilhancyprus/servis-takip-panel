@@ -37,6 +37,16 @@ function admin_money($value): string {
     return number_format((float)$value, 2, ',', '.') . ' ₺';
 }
 
+function admin_date_short($value): string {
+    if (empty($value)) return '-';
+    $time = strtotime((string)$value);
+    return $time ? date('d.m.Y', $time) : (string)$value;
+}
+
+function admin_query(array $params): string {
+    return 'admin.php?' . http_build_query($params);
+}
+
 function admin_base_url(): string {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
@@ -522,14 +532,18 @@ $users = [];
 $selectedFirmaId = $isLogged ? max(0, (int)($_GET['firma_id'] ?? 0)) : 0;
 $selectedMusteriId = $isLogged ? max(0, (int)($_GET['musteri_id'] ?? 0)) : 0;
 $search = $isLogged ? trim($_GET['q'] ?? '') : '';
+$globalSearch = $isLogged ? trim($_GET['global_q'] ?? '') : '';
 $customerSearch = $isLogged ? trim($_GET['customer_q'] ?? '') : '';
 $planFilter = $isLogged ? trim($_GET['plan'] ?? '') : '';
 $statusFilter = $isLogged ? trim($_GET['status'] ?? '') : '';
 $selectedChatId = $isLogged ? max(0, (int)($_GET['chat_id'] ?? 0)) : 0;
 $selectedFirma = false;
+$globalResults = [];
 $firmCustomers = [];
 $firmSummary = [];
 $firmDevices = [];
+$firmRecentServices = [];
+$firmRecentSales = [];
 $firmRecentActivity = [];
 $firmSubscriptionPayments = [];
 $supportNotes = [];
@@ -542,6 +556,7 @@ $customerDevices = [];
 $chatConversations = [];
 $passwordResetRequests = [];
 $adminUsers = [];
+$weeklyBackups = [];
 $selectedChat = false;
 $selectedChatMessages = [];
 $adminMetrics = [
@@ -549,7 +564,7 @@ $adminMetrics = [
     'unread_chat_messages' => 0,
     'pending_password_resets' => 0,
     'expiring_subscriptions' => 0,
-    'monthly_collections' => 0,
+    'attention_total' => 0,
     'monthly_signups' => 0,
     'connected_devices' => 0,
     'overdue_accounts' => 0,
@@ -560,6 +575,9 @@ $systemHealth = [
     'last_sync_at' => '',
     'revoked_devices' => 0,
     'remember_tokens' => 0,
+    'weekly_backup_count' => 0,
+    'weekly_backup_last' => '',
+    'weekly_backup_size_mb' => 0,
 ];
 $stats = [
     'toplam' => 0,
@@ -601,6 +619,46 @@ if ($isLogged) {
         ORDER BY k.created_at DESC
     ", $userParams);
 
+    if ($globalSearch !== '') {
+        $like = '%' . $globalSearch . '%';
+        $globalResults = $db->fetchAll("
+            SELECT
+                m.id AS musteri_id,
+                m.firma_id,
+                m.ad,
+                m.soyad,
+                m.telefon,
+                m.email,
+                m.adres,
+                m.updated_at,
+                k.firma_adi,
+                k.ad_soyad AS firma_yetkili,
+                k.email AS firma_email,
+                k.telefon AS firma_telefon,
+                k.paket,
+                k.aktif AS firma_aktif,
+                (SELECT COUNT(*) FROM servisler s WHERE s.firma_id=m.firma_id AND s.musteri_id=m.id AND s.deleted_at IS NULL) AS servis_sayisi,
+                (SELECT servis_tipi FROM servisler s WHERE s.firma_id=m.firma_id AND s.musteri_id=m.id AND s.deleted_at IS NULL ORDER BY DATE(COALESCE(s.tamamlanma_tarihi, s.created_at)) DESC, s.id DESC LIMIT 1) AS son_servis_tipi,
+                (SELECT COALESCE(s.tamamlanma_tarihi, s.created_at) FROM servisler s WHERE s.firma_id=m.firma_id AND s.musteri_id=m.id AND s.deleted_at IS NULL ORDER BY DATE(COALESCE(s.tamamlanma_tarihi, s.created_at)) DESC, s.id DESC LIMIT 1) AS son_servis_tarihi,
+                (SELECT toplam_tutar FROM servisler s WHERE s.firma_id=m.firma_id AND s.musteri_id=m.id AND s.deleted_at IS NULL ORDER BY DATE(COALESCE(s.tamamlanma_tarihi, s.created_at)) DESC, s.id DESC LIMIT 1) AS son_servis_tutar,
+                (SELECT COUNT(*) FROM satislar sa WHERE sa.firma_id=m.firma_id AND sa.musteri_id=m.id AND sa.deleted_at IS NULL) AS satis_sayisi,
+                (SELECT MAX(sa.satis_tarihi) FROM satislar sa WHERE sa.firma_id=m.firma_id AND sa.musteri_id=m.id AND sa.deleted_at IS NULL) AS son_satis_tarihi,
+                (SELECT COALESCE(SUM(s.toplam_tutar - s.odenen_tutar),0) FROM servisler s WHERE s.firma_id=m.firma_id AND s.musteri_id=m.id AND s.deleted_at IS NULL AND s.odeme_durumu!='odendi') AS servis_bakiye,
+                (SELECT COALESCE(SUM(sa.toplam_tutar - sa.odenen_tutar),0) FROM satislar sa WHERE sa.firma_id=m.firma_id AND sa.musteri_id=m.id AND sa.deleted_at IS NULL AND sa.odeme_durumu!='odendi') AS satis_bakiye,
+                (SELECT COUNT(*) FROM taksitler t WHERE t.firma_id=m.firma_id AND t.musteri_id=m.id AND t.odendi=0 AND DATE(t.vade_tarihi) < DATE('now')) AS geciken_taksit
+            FROM musteriler m
+            JOIN kullanicilar k ON k.id=m.firma_id AND k.deleted_at IS NULL
+            WHERE m.deleted_at IS NULL
+              AND (
+                m.ad LIKE ? OR m.soyad LIKE ? OR (m.ad || ' ' || m.soyad) LIKE ?
+                OR m.telefon LIKE ? OR m.email LIKE ? OR m.adres LIKE ?
+                OR k.firma_adi LIKE ? OR k.ad_soyad LIKE ? OR k.email LIKE ? OR k.telefon LIKE ?
+              )
+            ORDER BY COALESCE(m.updated_at, m.created_at) DESC, m.id DESC
+            LIMIT 60
+        ", [$like, $like, $like, $like, $like, $like, $like, $like, $like, $like]);
+    }
+
     $stats['toplam'] = count($users);
     foreach ($users as $u) {
         if ((int)$u['aktif']) $stats['aktif']++;
@@ -613,11 +671,14 @@ if ($isLogged) {
         'unread_chat_messages' => (int)$db->fetchColumn("SELECT COUNT(*) FROM support_messages WHERE sender_type='visitor' AND read_at IS NULL"),
         'pending_password_resets' => (int)$db->fetchColumn("SELECT COUNT(*) FROM password_reset_requests WHERE durum='bekliyor'"),
         'expiring_subscriptions' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND aktif=1 AND abonelik_bitis IS NOT NULL AND abonelik_bitis BETWEEN date('now') AND date('now', '+14 days')"),
-        'monthly_collections' => (float)$db->fetchColumn("SELECT COALESCE(SUM(tutar),0) FROM tahsilatlar WHERE deleted_at IS NULL AND tahsilat_tarihi BETWEEN date('now','start of month') AND date('now','start of month','+1 month','-1 day')"),
         'monthly_signups' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND created_at >= datetime('now','start of month')"),
         'connected_devices' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE revoked_at IS NULL"),
         'overdue_accounts' => (int)$db->fetchColumn("SELECT COUNT(*) FROM kullanicilar WHERE deleted_at IS NULL AND aktif=1 AND paket IN ('standart','premium') AND abonelik_bitis IS NOT NULL AND abonelik_bitis < date('now')"),
     ];
+    $adminMetrics['attention_total'] = $adminMetrics['open_chats']
+        + $adminMetrics['pending_password_resets']
+        + $adminMetrics['expiring_subscriptions']
+        + $adminMetrics['overdue_accounts'];
 
     $recentAdminLogs = $db->fetchAll("
         SELECT l.*, a.ad_soyad AS admin_adi, k.firma_adi
@@ -641,6 +702,10 @@ if ($isLogged) {
         'revoked_devices' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE revoked_at IS NOT NULL"),
         'remember_tokens' => (int)$db->fetchColumn("SELECT COUNT(*) FROM remember_tokens WHERE revoked_at IS NULL AND expires_at >= datetime('now')"),
     ];
+    $weeklyBackups = $db->getWeeklyBackups();
+    $systemHealth['weekly_backup_count'] = count($weeklyBackups);
+    $systemHealth['weekly_backup_last'] = $weeklyBackups[0]['created_at'] ?? '';
+    $systemHealth['weekly_backup_size_mb'] = $weeklyBackups[0]['size_mb'] ?? 0;
 
     $passwordResetRequests = $db->fetchAll("
         SELECT pr.*, k.firma_adi, k.ad_soyad, k.telefon, au.ad_soyad AS admin_adi
@@ -704,7 +769,7 @@ if ($isLogged) {
                 'masaustu_cihaz' => (int)$db->fetchColumn("SELECT COUNT(*) FROM sync_tokens WHERE firma_id=? AND revoked_at IS NULL AND device_type='desktop'", [$selectedFirmaId]),
                 'servis_bakiye' => (float)$db->fetchColumn("SELECT COALESCE(SUM(toplam_tutar - odenen_tutar),0) FROM servisler WHERE firma_id=? AND deleted_at IS NULL AND odeme_durumu!='odendi'", [$selectedFirmaId]),
                 'satis_bakiye' => (float)$db->fetchColumn("SELECT COALESCE(SUM(toplam_tutar - odenen_tutar),0) FROM satislar WHERE firma_id=? AND deleted_at IS NULL AND odeme_durumu!='odendi'", [$selectedFirmaId]),
-                'geciken_taksit' => (int)$db->fetchColumn("SELECT COUNT(*) FROM taksitler WHERE firma_id=? AND deleted_at IS NULL AND odendi=0 AND vade_tarihi < date('now')", [$selectedFirmaId]),
+                'geciken_taksit' => (int)$db->fetchColumn("SELECT COUNT(*) FROM taksitler WHERE firma_id=? AND odendi=0 AND vade_tarihi < date('now')", [$selectedFirmaId]),
             ];
 
             $customerWhere = ["m.firma_id=?", "m.deleted_at IS NULL"];
@@ -747,6 +812,47 @@ if ($isLogged) {
                 ORDER BY tarih DESC
                 LIMIT 12
             ", [$selectedFirmaId, $selectedFirmaId, $selectedFirmaId]);
+
+            $firmRecentServices = $db->fetchAll("
+                SELECT
+                    s.id,
+                    s.musteri_id,
+                    s.servis_tipi,
+                    s.durum,
+                    s.toplam_tutar,
+                    s.odeme_durumu,
+                    s.tamamlanma_tarihi,
+                    s.created_at,
+                    m.ad,
+                    m.soyad,
+                    m.telefon
+                FROM servisler s
+                LEFT JOIN musteriler m ON m.id=s.musteri_id AND m.firma_id=s.firma_id
+                WHERE s.firma_id=? AND s.deleted_at IS NULL
+                ORDER BY DATE(COALESCE(s.tamamlanma_tarihi, s.created_at)) DESC, s.id DESC
+                LIMIT 16
+            ", [$selectedFirmaId]);
+
+            $firmRecentSales = $db->fetchAll("
+                SELECT
+                    sa.id,
+                    sa.musteri_id,
+                    sa.toplam_tutar,
+                    sa.odeme_durumu,
+                    sa.odenen_tutar,
+                    sa.satis_tarihi,
+                    sa.odeme_turu,
+                    sa.taksit_sayisi,
+                    m.ad,
+                    m.soyad,
+                    m.telefon,
+                    (SELECT GROUP_CONCAT(sk.urun_adi, ', ') FROM satis_kalemleri sk WHERE sk.satis_id=sa.id) AS urunler
+                FROM satislar sa
+                LEFT JOIN musteriler m ON m.id=sa.musteri_id AND m.firma_id=sa.firma_id
+                WHERE sa.firma_id=? AND sa.deleted_at IS NULL
+                ORDER BY DATE(sa.satis_tarihi) DESC, sa.id DESC
+                LIMIT 16
+            ", [$selectedFirmaId]);
 
             $firmSubscriptionPayments = $db->fetchAll("
                 SELECT sp.*, au.ad_soyad AS admin_adi
@@ -801,7 +907,7 @@ if ($isLogged) {
                     $customerInstallments = $db->fetchAll("
                         SELECT id, satis_id, taksit_no, tutar, vade_tarihi, odeme_tarihi, odendi, odeme_yontemi, notlar
                         FROM taksitler
-                        WHERE firma_id=? AND musteri_id=? AND deleted_at IS NULL
+                        WHERE firma_id=? AND musteri_id=?
                         ORDER BY odendi ASC, vade_tarihi ASC
                         LIMIT 50
                     ", [$selectedFirmaId, $selectedMusteriId]);
@@ -948,7 +1054,8 @@ if ($isLogged) {
         <section class="grid lg:grid-cols-[1.1fr_.9fr] gap-4 mb-8">
             <div class="bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
                 <div class="text-xs uppercase tracking-wide text-blue-200 font-bold mb-2">Yönetim Özeti</div>
-                <h2 class="text-2xl font-extrabold mb-4">Bu ay <?= admin_money($adminMetrics['monthly_collections']) ?> tahsilat görünüyor.</h2>
+                <h2 class="text-2xl font-extrabold mb-2"><?= (int)$adminMetrics['attention_total'] ?> konu admin takibi bekliyor.</h2>
+                <p class="text-sm text-blue-100 mb-4">Destek, şifre talepleri, abonelik bitişleri ve süresi geçmiş hesaplar tek yerden izlenir.</p>
                 <div class="grid sm:grid-cols-4 gap-3 text-sm">
                     <div class="rounded-xl bg-white/10 p-3">
                         <div class="text-blue-100">Ücretsiz</div>
@@ -993,6 +1100,97 @@ if ($isLogged) {
                     </div>
                 </div>
             </div>
+        </section>
+
+        <section id="global-search" class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <div>
+                    <h2 class="font-bold">Destek Araması</h2>
+                    <p class="text-xs text-slate-500 mt-1">Tüm firmaların müşterilerinde isim, telefon, adres veya firma bilgisiyle hızlı arama yapın.</p>
+                </div>
+                <form method="get" class="flex flex-col sm:flex-row gap-2 w-full lg:w-[560px]">
+                    <input name="global_q" value="<?= htmlspecialchars($globalSearch) ?>"
+                           placeholder="Müşteri adı, telefon, adres veya firma ara"
+                           class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+                    <button class="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 font-semibold text-sm">
+                        <i class="fas fa-magnifying-glass"></i> Ara
+                    </button>
+                    <?php if ($globalSearch !== ''): ?>
+                        <a href="admin.php#global-search" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Temizle</a>
+                    <?php endif; ?>
+                </form>
+            </div>
+            <?php if ($globalSearch !== ''): ?>
+                <div class="px-5 py-3 bg-slate-50 border-b border-slate-100 text-sm text-slate-600">
+                    <strong><?= count($globalResults) ?></strong> kayıt bulundu. Sonuçlar doğrudan müşteri dosyasına açılır.
+                </div>
+                <div class="divide-y divide-slate-100">
+                    <?php foreach ($globalResults as $result): ?>
+                        <?php
+                            $openBalance = (float)$result['servis_bakiye'] + (float)$result['satis_bakiye'];
+                            $detailUrl = admin_query(['firma_id' => (int)$result['firma_id'], 'musteri_id' => (int)$result['musteri_id']]) . '#customer-detail';
+                            $firmUrl = admin_query(['firma_id' => (int)$result['firma_id']]) . '#firm-detail';
+                        ?>
+                        <div class="px-5 py-4 hover:bg-blue-50/50">
+                            <div class="grid lg:grid-cols-[1.2fr_.9fr_.9fr_auto] gap-4 items-start">
+                                <div>
+                                    <a href="<?= htmlspecialchars($detailUrl) ?>" class="text-base font-extrabold text-slate-900 hover:text-blue-700">
+                                        <?= htmlspecialchars(trim($result['ad'] . ' ' . $result['soyad'])) ?>
+                                    </a>
+                                    <div class="text-sm text-slate-500 mt-1">
+                                        <?= htmlspecialchars($result['telefon'] ?: 'Telefon yok') ?>
+                                        <?= $result['email'] ? ' · ' . htmlspecialchars($result['email']) : '' ?>
+                                    </div>
+                                    <?php if (!empty($result['adres'])): ?>
+                                        <div class="text-xs text-slate-400 mt-1 line-clamp-1"><?= htmlspecialchars($result['adres']) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div>
+                                    <a href="<?= htmlspecialchars($firmUrl) ?>" class="font-semibold text-blue-700 hover:text-blue-800">
+                                        <?= htmlspecialchars($result['firma_adi']) ?>
+                                    </a>
+                                    <div class="text-xs text-slate-500 mt-1">
+                                        <?= htmlspecialchars($result['firma_yetkili'] ?: '-') ?> · <?= htmlspecialchars(admin_plan_label($result['paket'] ?: 'ucretsiz')) ?>
+                                    </div>
+                                    <div class="text-xs <?= (int)$result['firma_aktif'] ? 'text-emerald-600' : 'text-red-600' ?> font-semibold mt-1">
+                                        <?= (int)$result['firma_aktif'] ? 'Firma aktif' : 'Firma pasif' ?>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div class="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                                        <div class="text-slate-400">Servis</div>
+                                        <div class="font-bold text-slate-800"><?= (int)$result['servis_sayisi'] ?> kayıt</div>
+                                        <div class="text-slate-500 mt-1"><?= htmlspecialchars($result['son_servis_tipi'] ?: '-') ?> · <?= admin_date_short($result['son_servis_tarihi'] ?? '') ?></div>
+                                    </div>
+                                    <div class="rounded-lg bg-slate-50 border border-slate-100 p-2">
+                                        <div class="text-slate-400">Satış</div>
+                                        <div class="font-bold text-slate-800"><?= (int)$result['satis_sayisi'] ?> kayıt</div>
+                                        <div class="text-slate-500 mt-1">Son: <?= admin_date_short($result['son_satis_tarihi'] ?? '') ?></div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <?php if ($openBalance > 0): ?>
+                                        <div class="inline-flex rounded-full bg-red-50 text-red-700 border border-red-100 px-2.5 py-1 text-xs font-bold">
+                                            Bakiye <?= admin_money($openBalance) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ((int)$result['geciken_taksit'] > 0): ?>
+                                        <div class="mt-2 inline-flex rounded-full bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 text-xs font-bold">
+                                            <?= (int)$result['geciken_taksit'] ?> geciken taksit
+                                        </div>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($detailUrl) ?>" class="mt-3 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 text-xs font-bold">
+                                        Dosyayı Aç
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (!$globalResults): ?>
+                        <div class="px-5 py-10 text-center text-slate-400 text-sm">Bu aramaya uygun müşteri bulunamadı.</div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </section>
 
         <section class="bg-white border border-slate-200 rounded-2xl p-4 mb-8">
@@ -1202,7 +1400,7 @@ if ($isLogged) {
         </section>
 
         <?php if ($selectedFirma): ?>
-        <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
+        <section id="firm-detail" class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-8">
             <div class="px-5 py-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <div class="text-xs uppercase tracking-wide text-blue-600 font-bold">Firma Detayı</div>
@@ -1378,7 +1576,7 @@ if ($isLogged) {
                     </div>
                 </div>
 
-                <div>
+                <div id="customer-detail">
                     <?php if ($customerDetail): ?>
                         <div class="px-5 py-3 bg-slate-50 border-b border-slate-100 font-bold text-sm">
                             Müşteri Dosyası: <?= htmlspecialchars($customerDetail['ad'] . ' ' . $customerDetail['soyad']) ?>
@@ -1526,6 +1724,77 @@ if ($isLogged) {
                 </div>
             </div>
 
+            <div class="grid lg:grid-cols-2 gap-4 p-5 border-t border-slate-100 bg-slate-50/60">
+                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                        <div class="font-bold text-sm">Firmanın Son Servisleri</div>
+                        <span class="text-xs text-slate-400"><?= count($firmRecentServices) ?> kayıt</span>
+                    </div>
+                    <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                        <?php foreach ($firmRecentServices as $service): ?>
+                            <a href="<?= htmlspecialchars(admin_query(['firma_id' => (int)$selectedFirma['id'], 'musteri_id' => (int)$service['musteri_id']]) . '#customer-detail') ?>"
+                               class="block px-4 py-3 text-sm hover:bg-blue-50">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold"><?= htmlspecialchars(trim(($service['ad'] ?? '') . ' ' . ($service['soyad'] ?? '')) ?: 'Müşteri yok') ?></div>
+                                        <div class="text-xs text-slate-500 mt-1">
+                                            <?= htmlspecialchars($service['telefon'] ?: 'Telefon yok') ?> ·
+                                            <?= htmlspecialchars($service['servis_tipi'] ?: '-') ?> ·
+                                            <?= admin_date_short($service['tamamlanma_tarihi'] ?: $service['created_at']) ?>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-bold"><?= admin_money($service['toplam_tutar']) ?></div>
+                                        <div class="text-xs <?= $service['odeme_durumu'] === 'odendi' ? 'text-emerald-600' : 'text-red-600' ?> font-semibold mt-1">
+                                            <?= htmlspecialchars($service['odeme_durumu'] ?: '-') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                        <?php if (!$firmRecentServices): ?>
+                            <div class="px-4 py-8 text-center text-slate-400 text-sm">Servis kaydı yok.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                        <div class="font-bold text-sm">Firmanın Son Satışları</div>
+                        <span class="text-xs text-slate-400"><?= count($firmRecentSales) ?> kayıt</span>
+                    </div>
+                    <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                        <?php foreach ($firmRecentSales as $sale): ?>
+                            <a href="<?= htmlspecialchars(admin_query(['firma_id' => (int)$selectedFirma['id'], 'musteri_id' => (int)$sale['musteri_id']]) . '#customer-detail') ?>"
+                               class="block px-4 py-3 text-sm hover:bg-blue-50">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold"><?= htmlspecialchars(trim(($sale['ad'] ?? '') . ' ' . ($sale['soyad'] ?? '')) ?: 'Müşteri yok') ?></div>
+                                        <div class="text-xs text-slate-500 mt-1">
+                                            <?= htmlspecialchars($sale['telefon'] ?: 'Telefon yok') ?> ·
+                                            <?= htmlspecialchars($sale['urunler'] ?: 'Ürün detayı yok') ?>
+                                        </div>
+                                        <div class="text-xs text-slate-400 mt-1">
+                                            <?= admin_date_short($sale['satis_tarihi']) ?> ·
+                                            <?= (int)($sale['taksit_sayisi'] ?: 0) > 1 ? ((int)$sale['taksit_sayisi'] . ' taksit') : htmlspecialchars($sale['odeme_turu'] ?: 'Peşin') ?>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-bold"><?= admin_money($sale['toplam_tutar']) ?></div>
+                                        <div class="text-xs <?= $sale['odeme_durumu'] === 'odendi' ? 'text-emerald-600' : 'text-red-600' ?> font-semibold mt-1">
+                                            <?= htmlspecialchars($sale['odeme_durumu'] ?: '-') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                        <?php if (!$firmRecentSales): ?>
+                            <div class="px-4 py-8 text-center text-slate-400 text-sm">Satış kaydı yok.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid lg:grid-cols-2 gap-4 p-5 border-t border-slate-100 bg-white">
                 <div class="rounded-xl border border-slate-200 overflow-hidden">
                     <div class="px-4 py-2 bg-slate-50 font-bold text-sm">Son Hareketler</div>
@@ -1593,9 +1862,10 @@ if ($isLogged) {
             </div>
         <?php endif; ?>
 
-        <section class="grid md:grid-cols-4 gap-4 mb-8">
+        <section class="grid md:grid-cols-5 gap-4 mb-8">
             <?php foreach ([
                 ['Veritabanı', $systemHealth['db_size_mb'] . ' MB', 'fa-database'],
+                ['HaftalÄ±k Yedek', ($systemHealth['weekly_backup_last'] ?: 'Yok') . ' / ' . (int)$systemHealth['weekly_backup_count'], 'fa-box-archive'],
                 ['Son Senkron', $systemHealth['last_sync_at'] ?: 'Yok', 'fa-rotate'],
                 ['İptal Cihaz', $systemHealth['revoked_devices'], 'fa-ban'],
                 ['Hatırlanan Oturum', $systemHealth['remember_tokens'], 'fa-cookie-bite'],

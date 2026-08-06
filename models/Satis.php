@@ -365,18 +365,10 @@ class Satis extends Model {
         );
 
         $taksitliMaliyet = (float)$this->db->fetchColumn(
-            "SELECT COALESCE(SUM(
-                CASE WHEN toplam_tutar > 0 THEN toplam_maliyet * donem_ciro / toplam_tutar ELSE 0 END
-             ),0)
+            "SELECT COALESCE(SUM(toplam_maliyet),0)
              FROM (
-                SELECT s.id, s.toplam_tutar,
-                       CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END AS toplam_maliyet,
-                       (
-                           SELECT COALESCE(SUM(t.tutar),0)
-                           FROM taksitler t
-                           WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
-                             AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
-                       ) AS donem_ciro
+                SELECT s.id,
+                       CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END AS toplam_maliyet
                 FROM satislar s
                 LEFT JOIN (
                     SELECT sk.satis_id,
@@ -397,8 +389,13 @@ class Satis extends Model {
                     WHERE c2.deleted_at IS NULL
                 ) dc ON dc.cihaz_id=s.cihaz_id
                 WHERE s.firma_id=? AND s.deleted_at IS NULL AND s.odeme_turu='taksitli'
+                  AND (
+                    SELECT MIN(DATE(t.vade_tarihi))
+                    FROM taksitler t
+                    WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
+                  ) BETWEEN DATE(?) AND DATE(?)
              )",
-            [$baslangic, $bitis, $usdKur, $usdKur, $this->firmaId]
+            [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
         );
 
         return $pesinMaliyet + $taksitliMaliyet;

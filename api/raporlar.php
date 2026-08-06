@@ -455,7 +455,7 @@ switch ($tip) {
         $db = Database::getInstance();
         $fid = $_SESSION['firma_id'];
         $baslangic = $_GET['baslangic'] ?? date('Y-m-01');
-        $bitis = $_GET['bitis'] ?? date('Y-m-d');
+        $bitis = $_GET['bitis'] ?? date('Y-m-t');
         $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
         $satisModel = new Satis();
 
@@ -602,7 +602,7 @@ switch ($tip) {
         $db = Database::getInstance();
         $fid = $_SESSION['firma_id'];
         $baslangic = $_GET['baslangic'] ?? date('Y-m-01');
-        $bitis = $_GET['bitis'] ?? date('Y-m-d');
+        $bitis = $_GET['bitis'] ?? date('Y-m-t');
         $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
 
         $satisRows = [];
@@ -684,9 +684,12 @@ switch ($tip) {
                 s.toplam_tutar,
                 t.tutar AS ciro,
                 CASE
-                    WHEN s.toplam_tutar > 0 THEN
-                        (CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END)
-                        * t.tutar / s.toplam_tutar
+                    WHEN DATE(t.vade_tarihi) = (
+                        SELECT MIN(DATE(t2.vade_tarihi))
+                        FROM taksitler t2
+                        WHERE t2.satis_id=s.id AND t2.firma_id=s.firma_id AND t2.deleted_at IS NULL
+                    )
+                    THEN CASE WHEN COALESCE(lc.line_cost, 0) > 0 THEN lc.line_cost ELSE COALESCE(dc.device_cost, 0) END
                     ELSE 0
                 END AS maliyet,
                 COALESCE(th.tahsilat, 0) AS tahsilat,
@@ -867,7 +870,7 @@ switch ($tip) {
         $s = new Servis();
         $filtre = [
             'baslangic' => $_GET['baslangic'] ?? date('Y-m-01'),
-            'bitis'     => $_GET['bitis'] ?? date('Y-m-d'),
+            'bitis'     => $_GET['bitis'] ?? date('Y-m-t'),
             'sirala'    => 'tarih_asc',
         ];
         $rows       = $s->getAll(array_filter($filtre));

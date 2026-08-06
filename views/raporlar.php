@@ -32,7 +32,7 @@ include __DIR__ . '/layout/header.php';
             <div>
                 <h3 class="font-semibold text-slate-800">İş Hacmi / Tahakkuk / Net Kâr</h3>
                 <p class="text-sm text-slate-500 mt-1">
-                    Yapılan işi satış tarihine göre, tahakkuku ise taksit ve servis vade ayına göre hesaplar. Maliyet taksitlere oranlı dağıtılır.
+                    Yapılan işi satış tarihine göre, tahakkuku ise taksit ve servis vade ayına göre hesaplar. Satış maliyeti ilk vade ayına yazılır.
                     <span x-show="doviz.usd_try" x-text="` USD kuru: ${doviz.usd_try.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ₺`"></span>
                 </p>
             </div>
@@ -65,7 +65,6 @@ include __DIR__ . '/layout/header.php';
             <div class="rounded-lg bg-orange-50 border border-orange-100 p-4">
                 <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide">Tahakkuk Maliyet</p>
                 <p class="text-2xl font-bold text-orange-700 mt-1" x-text="formatCurrency(karOzet.toplam_maliyet || 0)"></p>
-                <p class="text-xs text-orange-600 mt-1">Taksit vadelerine dağıtılır</p>
             </div>
             <div class="rounded-lg border p-4"
                  :class="(karOzet.net_kar || 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'">
@@ -337,10 +336,10 @@ function raporlarApp() {
         trendAy: '<?= date('Y-m') ?>',
         trendChart: null,
         trendChartError: '',
-        servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
+        servisFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-t') ?>' },
         bakimAy: '<?= date('Y-m') ?>',
-        karFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
-        finansFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-d') ?>' },
+        karFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-t') ?>' },
+        finansFiltre: { baslangic: '<?= date('Y-m-01') ?>', bitis: '<?= date('Y-m-t') ?>' },
 
         async init() {
             await Promise.all([this.loadStats(), this.loadDoviz()]);
