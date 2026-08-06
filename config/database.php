@@ -204,7 +204,10 @@ class Database {
 
     public function getWeeklyBackups(): array {
         $backupDir = $this->dbDir . DIRECTORY_SEPARATOR . 'backups';
-        $files = glob($backupDir . DIRECTORY_SEPARATOR . 'weekly-*.db') ?: [];
+        $files = array_merge(
+            glob($backupDir . DIRECTORY_SEPARATOR . 'weekly-*.db') ?: [],
+            glob($backupDir . DIRECTORY_SEPARATOR . 'mysql-weekly-*.sql') ?: []
+        );
         usort($files, static fn($a, $b) => filemtime($b) <=> filemtime($a));
 
         return array_map(static function ($file) {
@@ -218,7 +221,12 @@ class Database {
     }
 
     private function ensureWeeklyBackup(): void {
-        if ($this->isMysql() || getenv('STP_DISABLE_AUTO_BACKUP')) {
+        if (getenv('STP_DISABLE_AUTO_BACKUP')) {
+            return;
+        }
+
+        if ($this->isMysql()) {
+            $this->ensureMysqlWeeklyBackup();
             return;
         }
 
@@ -263,6 +271,96 @@ class Database {
         foreach (array_slice($files, 4) as $oldFile) {
             @unlink($oldFile);
         }
+    }
+
+    private function ensureMysqlWeeklyBackup(): void {
+        $backupDir = $this->dbDir . DIRECTORY_SEPARATOR . 'backups';
+        if (!is_dir($backupDir) && !@mkdir($backupDir, 0755, true) && !is_dir($backupDir)) {
+            return;
+        }
+
+        $target = $backupDir . DIRECTORY_SEPARATOR . 'mysql-weekly-' . date('o-\WW') . '.sql';
+        if (is_file($target)) {
+            $this->pruneMysqlWeeklyBackups($backupDir);
+            return;
+        }
+
+        $lockFile = $backupDir . DIRECTORY_SEPARATOR . '.mysql-weekly-backup.lock';
+        $lock = @fopen($lockFile, 'c');
+        if (!$lock) {
+            return;
+        }
+        if (!@flock($lock, LOCK_EX | LOCK_NB)) {
+            @fclose($lock);
+            return;
+        }
+
+        try {
+            clearstatcache(true, $target);
+            if (!is_file($target)) {
+                $this->writeMysqlDump($target);
+            }
+            $this->pruneMysqlWeeklyBackups($backupDir);
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+    }
+
+    private function pruneMysqlWeeklyBackups(string $backupDir): void {
+        $files = glob($backupDir . DIRECTORY_SEPARATOR . 'mysql-weekly-*.sql') ?: [];
+        usort($files, static fn($a, $b) => filemtime($b) <=> filemtime($a));
+        foreach (array_slice($files, 4) as $oldFile) {
+            @unlink($oldFile);
+        }
+    }
+
+    private function writeMysqlDump(string $target): void {
+        $tmp = $target . '.tmp';
+        $fh = @fopen($tmp, 'wb');
+        if (!$fh) {
+            return;
+        }
+
+        fwrite($fh, "-- Servis Takip Panel MySQL weekly backup\n");
+        fwrite($fh, "-- Created: " . date('c') . "\n\n");
+        fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
+
+        $tables = $this->pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_NUM);
+        foreach ($tables as $tableRow) {
+            $table = (string)$tableRow[0];
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+                continue;
+            }
+
+            $create = $this->pdo->query('SHOW CREATE TABLE `' . $table . '`')->fetch(PDO::FETCH_ASSOC);
+            $createSql = $create['Create Table'] ?? array_values($create)[1] ?? '';
+            fwrite($fh, "DROP TABLE IF EXISTS `{$table}`;\n");
+            fwrite($fh, $createSql . ";\n\n");
+
+            $stmt = $this->pdo->query('SELECT * FROM `' . $table . '`');
+            $cols = [];
+            $rowCount = 0;
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (!$cols) {
+                    $cols = array_keys($row);
+                    fwrite($fh, 'INSERT INTO `' . $table . '` (`' . implode('`, `', $cols) . "`) VALUES\n");
+                } else {
+                    fwrite($fh, ",\n");
+                }
+                $values = array_map(fn($value) => $value === null ? 'NULL' : $this->pdo->quote((string)$value), array_values($row));
+                fwrite($fh, '(' . implode(', ', $values) . ')');
+                $rowCount++;
+            }
+            if ($rowCount > 0) {
+                fwrite($fh, ";\n");
+            }
+            fwrite($fh, "\n");
+        }
+
+        fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
+        fclose($fh);
+        @rename($tmp, $target);
     }
 
     private function initTables(): void {
