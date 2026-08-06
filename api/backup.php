@@ -43,6 +43,10 @@ $referenceMap = [
 ];
 
 function backup_columns(PDO $pdo, string $table): array {
+    $db = Database::getInstance();
+    if (method_exists($db, 'columns')) {
+        return $db->columns($table);
+    }
     return array_column($pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC), 'name');
 }
 

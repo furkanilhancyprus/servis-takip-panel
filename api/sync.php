@@ -32,6 +32,10 @@ function sync_table_allowed(string $table, array $tables): bool {
 }
 
 function sync_columns(PDO $pdo, string $table): array {
+    $db = Database::getInstance();
+    if (method_exists($db, 'columns')) {
+        return $db->columns($table);
+    }
     $cols = $pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC);
     return array_column($cols, 'name');
 }

@@ -1,13 +1,15 @@
-<?php
+﻿<?php
 class Database {
     private static ?Database $instance = null;
     private PDO $pdo;
     private string $dbDir;
     private string $dbPath;
+    private string $driver = 'sqlite';
 
     private function __construct() {
-        // Masaüstü uygulamada DB kullanıcının AppData klasöründe tutulur
-        // Web'de ise proje içindeki database/ klasöründe
+        $this->loadEnv();
+        // MasaÃ¼stÃ¼ uygulamada DB kullanÄ±cÄ±nÄ±n AppData klasÃ¶rÃ¼nde tutulur
+        // Web'de ise proje iÃ§indeki database/ klasÃ¶rÃ¼nde
         $envDataDir = getenv('STP_DATA_DIR');
         if ($envDataDir && is_dir($envDataDir)) {
             $dbDir  = rtrim($envDataDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'database';
@@ -18,15 +20,35 @@ class Database {
         $this->dbDir = $dbDir;
         $this->dbPath = $dbPath;
 
-        if (!is_dir($dbDir)) {
+        $this->driver = strtolower((string)(getenv('STP_DB_DRIVER') ?: 'sqlite'));
+
+        if ($this->driver === 'sqlite' && !is_dir($dbDir)) {
             mkdir($dbDir, 0755, true);
         }
 
-        $this->pdo = new PDO("sqlite:$dbPath");
+        if ($this->driver === 'mysql') {
+            $host = getenv('STP_DB_HOST') ?: 'localhost';
+            $port = getenv('STP_DB_PORT') ?: '3306';
+            $name = getenv('STP_DB_NAME') ?: '';
+            $user = getenv('STP_DB_USER') ?: '';
+            $pass = getenv('STP_DB_PASS') ?: '';
+            if ($name === '' || $user === '') {
+                throw new RuntimeException('MySQL icin STP_DB_NAME ve STP_DB_USER gerekli.');
+            }
+            $dsn = getenv('STP_DB_DSN') ?: "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+            $this->pdo = new PDO($dsn, $user, $pass);
+        } else {
+            $this->driver = 'sqlite';
+            $this->pdo = new PDO("sqlite:$dbPath");
+        }
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-        $this->pdo->exec('PRAGMA foreign_keys = ON');
-        $this->pdo->exec('PRAGMA journal_mode = WAL');
+        if ($this->driver === 'mysql') {
+            $this->execSql("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        } else {
+            $this->pdo->exec('PRAGMA foreign_keys = ON');
+            $this->pdo->exec('PRAGMA journal_mode = WAL');
+        }
 
         $this->initTables();
         $this->runMigrations();
@@ -45,7 +67,16 @@ class Database {
         return $this->pdo;
     }
 
+    public function driver(): string {
+        return $this->driver;
+    }
+
+    public function isMysql(): bool {
+        return $this->driver === 'mysql';
+    }
+
     public function query(string $sql, array $params = []): PDOStatement {
+        $sql = $this->translateSql($sql);
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt;
@@ -72,6 +103,104 @@ class Database {
         return $this->pdo->lastInsertId();
     }
 
+    public function columns(string $table): array {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+            return [];
+        }
+        if ($this->isMysql()) {
+            $rows = $this->pdo->query("SHOW COLUMNS FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+            return array_column($rows, 'Field');
+        }
+        $rows = $this->pdo->query("PRAGMA table_info({$table})")->fetchAll(PDO::FETCH_ASSOC);
+        return array_column($rows, 'name');
+    }
+
+    public function execSql(string $sql): void {
+        $sql = $this->translateSql($sql);
+        if (!$this->isMysql()) {
+            $this->pdo->exec($sql);
+            return;
+        }
+
+        foreach ($this->splitSqlStatements($sql) as $statement) {
+            $this->pdo->exec($statement);
+        }
+    }
+
+    private function splitSqlStatements(string $sql): array {
+        $parts = array_map('trim', explode(';', $sql));
+        return array_values(array_filter($parts, static fn($part) => $part !== ''));
+    }
+
+    private function loadEnv(): void {
+        $envFile = __DIR__ . '/../.env';
+        if (!is_file($envFile)) {
+            return;
+        }
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '' || strpos($line, '#') === 0 || strpos($line, '=') === false) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            $value = trim($value, "\"'");
+            if ($key !== '' && getenv($key) === false) {
+                putenv($key . '=' . $value);
+                $_ENV[$key] = $value;
+            }
+        }
+    }
+
+    private function translateSql(string $sql): string {
+        if (!$this->isMysql()) {
+            return $sql;
+        }
+
+        $replacements = [
+            "date('now', 'start of month', '+1 month', '-1 day')" => 'LAST_DAY(CURRENT_DATE)',
+            "date('now','start of month','+1 month','-1 day')" => 'LAST_DAY(CURRENT_DATE)',
+            "date('now', 'start of month')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')",
+            "date('now','start of month')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')",
+            "date('now', '+14 days')" => 'DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY)',
+            "date('now','+14 days')" => 'DATE_ADD(CURRENT_DATE, INTERVAL 14 DAY)',
+            "date('now', '+30 days')" => 'DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)',
+            "date('now','+30 days')" => 'DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)',
+            "datetime('now', '-7 days')" => 'DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 7 DAY)',
+            "datetime('now','-7 days')" => 'DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 7 DAY)',
+            "datetime('now','start of month')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')",
+            "datetime('now', 'start of month')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')",
+            "datetime('now')" => 'CURRENT_TIMESTAMP',
+            "date('now')" => 'CURRENT_DATE',
+            "strftime('%Y-%m','now')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m')",
+            "strftime('%Y-%m', 'now')" => "DATE_FORMAT(CURRENT_DATE, '%Y-%m')",
+            "INSERT OR IGNORE" => 'INSERT IGNORE',
+        ];
+        $sql = str_replace(array_keys($replacements), array_values($replacements), $sql);
+
+        $schemaReplacements = [
+            'INTEGER PRIMARY KEY AUTOINCREMENT' => 'INT AUTO_INCREMENT PRIMARY KEY',
+            'INTEGER PRIMARY KEY CHECK(id = 1)' => 'INT PRIMARY KEY',
+            'REAL' => 'DOUBLE',
+            'DATE DEFAULT (CURRENT_DATE)' => 'DATE DEFAULT NULL',
+            'DATE DEFAULT (date(\'now\'))' => 'DATE DEFAULT NULL',
+        ];
+        $sql = str_replace(array_keys($schemaReplacements), array_values($schemaReplacements), $sql);
+        $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+DEFAULT\\s+)/i', '$1VARCHAR(255)$2', $sql);
+        $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+UNIQUE)/i', '$1VARCHAR(255)$2', $sql);
+        $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+NOT\\s+NULL\\s+CHECK)/i', '$1VARCHAR(255)$2', $sql);
+
+        $sql = preg_replace("/strftime\\('%Y-%m',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%Y-%m')", $sql);
+        $sql = preg_replace("/strftime\\('%Y',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%Y')", $sql);
+        $sql = preg_replace("/strftime\\('%m',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%m')", $sql);
+        $sql = preg_replace("/([a-zA-Z0-9_\\.]+)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*([a-zA-Z0-9_\\.]+)/", "CONCAT($1, ' ', $2)", $sql);
+        $sql = preg_replace("/COALESCE\\(([^\\),]+),\\s*''\\)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*COALESCE\\(([^\\),]+),\\s*''\\)/", "CONCAT(COALESCE($1, ''), ' ', COALESCE($2, ''))", $sql);
+        $sql = str_replace('SUM(MAX(0, tutar-COALESCE(odenen_tutar,0)))', 'SUM(GREATEST(0, tutar-COALESCE(odenen_tutar,0)))', $sql);
+
+        return $sql;
+    }
+
     public function getWeeklyBackups(): array {
         $backupDir = $this->dbDir . DIRECTORY_SEPARATOR . 'backups';
         $files = glob($backupDir . DIRECTORY_SEPARATOR . 'weekly-*.db') ?: [];
@@ -88,7 +217,7 @@ class Database {
     }
 
     private function ensureWeeklyBackup(): void {
-        if (getenv('STP_DISABLE_AUTO_BACKUP')) {
+        if ($this->isMysql() || getenv('STP_DISABLE_AUTO_BACKUP')) {
             return;
         }
 
@@ -136,8 +265,12 @@ class Database {
     }
 
     private function initTables(): void {
-        // ── Kullanıcılar (Firmalar / Tenants) ──────────────────────────────
-        $this->pdo->exec("
+        if ($this->isMysql()) {
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+        }
+
+        // â”€â”€ KullanÄ±cÄ±lar (Firmalar / Tenants) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        $this->execSql("
             CREATE TABLE IF NOT EXISTS kullanicilar (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 firma_adi   TEXT NOT NULL,
@@ -154,7 +287,7 @@ class Database {
             );
         ");
 
-        $this->pdo->exec("
+        $this->execSql("
             CREATE TABLE IF NOT EXISTS admin_users (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 ad_soyad    TEXT NOT NULL,
@@ -251,8 +384,8 @@ class Database {
             );
         ");
 
-        // ── Ana tablolar (firma_id ile) ─────────────────────────────────────
-        $this->pdo->exec("
+        // â”€â”€ Ana tablolar (firma_id ile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        $this->execSql("
             CREATE TABLE IF NOT EXISTS musteriler (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 firma_id    INTEGER NOT NULL DEFAULT 0,
@@ -513,10 +646,14 @@ class Database {
                 FOREIGN KEY (parca_id) REFERENCES parcalar(id) ON DELETE CASCADE
             );
         ");
+
+        if ($this->isMysql()) {
+            $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+        }
     }
 
     private function runMigrations(): void {
-        // Tablolara firma_id / yeni kolonlar ekle (eski kurulumlar için)
+        // Tablolara firma_id / yeni kolonlar ekle (eski kurulumlar iÃ§in)
         $migrations = [
             ['musteriler',        'firma_id',     "ALTER TABLE musteriler ADD COLUMN firma_id INTEGER NOT NULL DEFAULT 0"],
             ['servisler',         'firma_id',     "ALTER TABLE servisler ADD COLUMN firma_id INTEGER NOT NULL DEFAULT 0"],
@@ -530,7 +667,7 @@ class Database {
             ['standart_islemler', 'firma_id',     "ALTER TABLE standart_islemler ADD COLUMN firma_id INTEGER NOT NULL DEFAULT 0"],
         ];
 
-        // Yeni kolonlar: satislar tablosuna taksit + cihaz alanları
+        // Yeni kolonlar: satislar tablosuna taksit + cihaz alanlarÄ±
         $extraMigrations = [
             ['satislar', 'odeme_turu',    "ALTER TABLE satislar ADD COLUMN odeme_turu TEXT DEFAULT 'pesin'"],
             ['satislar', 'taksit_sayisi', "ALTER TABLE satislar ADD COLUMN taksit_sayisi INTEGER DEFAULT 1"],
@@ -568,14 +705,13 @@ class Database {
         $migrations = array_merge($migrations, $extraMigrations);
 
         foreach ($migrations as [$tablo, $kolon, $sql]) {
-            $cols = $this->pdo->query("PRAGMA table_info({$tablo})")->fetchAll(PDO::FETCH_ASSOC);
-            $colNames = array_column($cols, 'name');
+            $colNames = $this->columns($tablo);
             if (!in_array($kolon, $colNames)) {
-                $this->pdo->exec($sql);
+                $this->execSql($sql);
             }
         }
 
-        $this->pdo->exec("
+        $this->execSql("
             UPDATE taksitler
             SET odenen_tutar=tutar
             WHERE deleted_at IS NULL AND odendi=1 AND COALESCE(odenen_tutar,0)=0;
@@ -596,7 +732,7 @@ class Database {
               );
         ");
 
-        $this->pdo->exec("
+        $this->execSql("
             CREATE TABLE IF NOT EXISTS sync_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 firma_id INTEGER NOT NULL,
@@ -650,20 +786,20 @@ class Database {
             );
         ");
 
-        $syncTokenCols = array_column($this->pdo->query("PRAGMA table_info(sync_tokens)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        $syncTokenCols = $this->columns('sync_tokens');
         foreach ([
             'device_type' => "ALTER TABLE sync_tokens ADD COLUMN device_type TEXT",
             'ip_address' => "ALTER TABLE sync_tokens ADD COLUMN ip_address TEXT",
             'user_agent' => "ALTER TABLE sync_tokens ADD COLUMN user_agent TEXT",
         ] as $column => $sql) {
             if (!in_array($column, $syncTokenCols, true)) {
-                $this->pdo->exec($sql);
+                $this->execSql($sql);
             }
         }
 
-        $syncStateCols = array_column($this->pdo->query("PRAGMA table_info(sync_state)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        $syncStateCols = $this->columns('sync_state');
         if (!in_array('token', $syncStateCols, true)) {
-            $this->pdo->exec("ALTER TABLE sync_state ADD COLUMN token TEXT");
+            $this->execSql("ALTER TABLE sync_state ADD COLUMN token TEXT");
         }
 
         $this->backfillBakimFromSales();
@@ -671,7 +807,11 @@ class Database {
     }
 
     private function backfillBakimFromSales(): void {
-        $this->pdo->exec("
+        if ($this->isMysql()) {
+            return;
+        }
+
+        $this->execSql("
             UPDATE periyodik_bakimlar
             SET aktif=1,
                 son_bakim_tarihi=COALESCE(
@@ -720,7 +860,7 @@ class Database {
               )
         ");
 
-        $this->pdo->exec("
+        $this->execSql("
             INSERT INTO periyodik_bakimlar (musteri_id, aktif, periyot_ay, son_bakim_tarihi, sonraki_bakim_tarihi, uuid)
             SELECT
                 m.id,
@@ -742,8 +882,8 @@ class Database {
     }
 
     private function syncCihazKatalogu(): void {
-        $cihazCols = array_column($this->pdo->query("PRAGMA table_info(cihazlar)")->fetchAll(PDO::FETCH_ASSOC), 'name');
-        $parcaCols = array_column($this->pdo->query("PRAGMA table_info(parcalar)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+        $cihazCols = $this->columns('cihazlar');
+        $parcaCols = $this->columns('parcalar');
         if (!in_array('parca_id', $cihazCols, true) || !in_array('is_cihaz', $parcaCols, true)) return;
 
         $cihazStmt = $this->pdo->prepare("
@@ -830,12 +970,12 @@ class Database {
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
-    // ── Yeni kayıt olan firma için varsayılan verileri oluştur ────────────
+    // â”€â”€ Yeni kayÄ±t olan firma iÃ§in varsayÄ±lan verileri oluÅŸtur â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     public function seedFirmaDefaults(int $firmaId): void {
-        // Varsayılan standart işlemler
+        // VarsayÄ±lan standart iÅŸlemler
         $items = [
-            'Full Servis', 'Tank Değişimi', 'Membran Değişimi',
-            '5 Mikron Filtre Değişimi', "4'lü Filtre Değişimi", 'Adaptör Değişimi',
+            'Full Servis', 'Tank DeÄŸiÅŸimi', 'Membran DeÄŸiÅŸimi',
+            '5 Mikron Filtre DeÄŸiÅŸimi', "4'lÃ¼ Filtre DeÄŸiÅŸimi", 'AdaptÃ¶r DeÄŸiÅŸimi',
         ];
         $stmt = $this->pdo->prepare(
             "INSERT OR IGNORE INTO standart_islemler (firma_id, islem_adi, varsayilan_fiyat) VALUES (?, ?, 0)"
@@ -844,7 +984,7 @@ class Database {
             $stmt->execute([$firmaId, $ad]);
         }
 
-        // Varsayılan ayarlar
+        // VarsayÄ±lan ayarlar
         $defaults = [
             ['varsayilan_bakim_periyodu', '6'],
             ['varsayilan_hatirlatma_gun', '7'],
@@ -852,10 +992,10 @@ class Database {
             ['firma_telefon',  ''],
             ['firma_adres',    ''],
             ['firma_email',    ''],
-            ['para_birimi',    '₺'],
+            ['para_birimi',    'â‚º'],
             ['firma_vergi_no', ''],
             ['firma_iban',     ''],
-            ['fatura_notu',    'Ödeme için teşekkür ederiz.'],
+            ['fatura_notu',    'Ã–deme iÃ§in teÅŸekkÃ¼r ederiz.'],
             ['fatura_logo',    ''],
         ];
         $stmt = $this->pdo->prepare(
@@ -866,3 +1006,4 @@ class Database {
         }
     }
 }
+

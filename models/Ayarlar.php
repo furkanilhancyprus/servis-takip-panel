@@ -17,6 +17,14 @@ class Ayarlar extends Model {
     }
 
     public function set(string $anahtar, $deger): void {
+        if ($this->db->isMysql()) {
+            $this->db->query("
+                INSERT INTO ayarlar (firma_id, anahtar, deger) VALUES (?,?,?)
+                ON DUPLICATE KEY UPDATE deger=VALUES(deger), updated_at=CURRENT_TIMESTAMP
+            ", [$this->firmaId, $anahtar, $deger]);
+            return;
+        }
+
         $this->db->query("
             INSERT INTO ayarlar (firma_id, anahtar, deger) VALUES (?,?,?)
             ON CONFLICT(firma_id, anahtar) DO UPDATE SET deger=excluded.deger, updated_at=CURRENT_TIMESTAMP
