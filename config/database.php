@@ -178,6 +178,10 @@ class Database {
             "INSERT OR IGNORE" => 'INSERT IGNORE',
         ];
         $sql = str_replace(array_keys($replacements), array_values($replacements), $sql);
+        $sql = preg_replace("/DATE\\('now'\\s*,\\s*'\\+(\\d+) days'\\)/i", "DATE_ADD(CURRENT_DATE, INTERVAL $1 DAY)", $sql);
+        $sql = preg_replace("/DATE\\('now'\\s*,\\s*'\\+'\\s*\\|\\|\\s*([a-zA-Z0-9_\\.]+)\\s*\\|\\|\\s*' days'\\)/i", "DATE_ADD(CURRENT_DATE, INTERVAL $1 DAY)", $sql);
+        $sql = preg_replace("/DATE\\('now'\\)/i", 'CURRENT_DATE', $sql);
+        $sql = preg_replace("/datetime\\('now'\\)/i", 'CURRENT_TIMESTAMP', $sql);
 
         $schemaReplacements = [
             'INTEGER PRIMARY KEY AUTOINCREMENT' => 'INT AUTO_INCREMENT PRIMARY KEY',
@@ -201,6 +205,7 @@ class Database {
         $sql = preg_replace("/([a-zA-Z0-9_\\.]+)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*([a-zA-Z0-9_\\.]+)/", "CONCAT($1, ' ', $2)", $sql);
         $sql = preg_replace("/COALESCE\\(([^\\),]+),\\s*''\\)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*COALESCE\\(([^\\),]+),\\s*''\\)/", "CONCAT(COALESCE($1, ''), ' ', COALESCE($2, ''))", $sql);
         $sql = str_replace('SUM(MAX(0, tutar-COALESCE(odenen_tutar,0)))', 'SUM(GREATEST(0, tutar-COALESCE(odenen_tutar,0)))', $sql);
+        $sql = preg_replace('/MAX\\(0,\\s*([^\\)]+COALESCE\\([^\\)]+\\)[^\\)]*)\\)/i', 'GREATEST(0, $1)', $sql);
 
         return $sql;
     }
