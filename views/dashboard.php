@@ -224,7 +224,7 @@ include __DIR__ . '/layout/header.php';
                 </div>
                 <input type="month" class="form-input w-40 text-xs py-1.5" x-model="seciliAy" @change="loadDashboard()">
             </div>
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
                     <p class="text-xs text-blue-500 font-semibold uppercase">Satış</p>
                     <p class="text-2xl font-bold text-blue-700 mt-1" x-text="ayOzeti.satis_adet || 0"></p>
@@ -248,20 +248,6 @@ include __DIR__ . '/layout/header.php';
                 <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
                     <p class="text-xs text-amber-600 font-semibold uppercase">Net Kar</p>
                     <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(ayOzeti.net_kar || 0)"></p>
-                </div>
-            </div>
-            <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-semibold text-slate-500 uppercase">Günlük Tahakkuk Dağılımı</p>
-                <p class="text-xs text-slate-400" x-show="ayOzeti.usd_try" x-text="'USD: ' + Number(ayOzeti.usd_try || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ₺'"></p>
-            </div>
-            <div class="relative h-36 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-                <canvas id="dailyCiroChart" class="block w-full h-full" x-show="maxGunlukCiro > 0"></canvas>
-                <div x-show="chartError"
-                     class="absolute inset-0 flex items-center justify-center text-sm text-red-500 bg-white/80 pointer-events-none"
-                     x-text="chartError"></div>
-                <div x-show="gunlukAyCiro.length === 0 || maxGunlukCiro === 0"
-                     class="absolute inset-0 flex items-center justify-center text-sm text-slate-400 pointer-events-none">
-                    Bu ay için ciro kaydı yok
                 </div>
             </div>
         </div>
@@ -306,9 +292,6 @@ function dashboardApp() {
         stats: {}, gecikenler: [], yaklasanlar: [], sonServisler: [],
         seciliAy: '<?= date('Y-m') ?>',
         ayOzeti: {},
-        gunlukAyCiro: [],
-        dailyChart: null,
-        chartError: '',
 
         async init() {
             await this.loadDashboard();
@@ -322,8 +305,6 @@ function dashboardApp() {
                 this.yaklasanlar  = d.yaklasanlar  || [];
                 this.sonServisler = d.sonServisler  || [];
                 this.ayOzeti      = d.ayOzeti || {};
-                this.gunlukAyCiro = d.gunlukAyCiro || [];
-                this.$nextTick(() => this.renderDailyCiroChart());
             } catch(e) {}
         },
 
@@ -331,81 +312,6 @@ function dashboardApp() {
             if (!this.seciliAy) return '';
             const [y, m] = this.seciliAy.split('-').map(Number);
             return new Date(y, m - 1, 1).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
-        },
-
-        get maxGunlukCiro() {
-            return Math.max(0, ...this.gunlukAyCiro.map(g => Number(g.ciro || 0)));
-        },
-
-        barHeight(value) {
-            if (!this.maxGunlukCiro) return 2;
-            return Math.max(4, Math.round((Number(value || 0) / this.maxGunlukCiro) * 100));
-        },
-
-        renderDailyCiroChart() {
-            const ctx = document.getElementById('dailyCiroChart');
-            if (!ctx) return;
-            this.chartError = '';
-            if (typeof Chart === 'undefined') {
-                this.chartError = 'Grafik kütüphanesi yüklenemedi.';
-                return;
-            }
-            if (this.dailyChart) this.dailyChart.destroy();
-
-            this.dailyChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: this.gunlukAyCiro.map(g => String(g.gun)),
-                    datasets: [{
-                        label: 'Günlük Tahakkuk',
-                        data: this.gunlukAyCiro.map(g => Number(g.ciro || 0)),
-                        backgroundColor: this.gunlukAyCiro.map(g => Number(g.ciro || 0) > 0 ? '#2563eb' : 'rgba(148,163,184,.22)'),
-                        hoverBackgroundColor: '#1d4ed8',
-                        borderRadius: 6,
-                        maxBarThickness: 18,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                title: items => {
-                                    const row = this.gunlukAyCiro[items[0].dataIndex] || {};
-                                    return formatDate(row.tarih);
-                                },
-                                label: item => `Tahakkuk: ${formatCurrency(item.raw)}`,
-                                afterBody: items => {
-                                    const row = this.gunlukAyCiro[items[0].dataIndex] || {};
-                                    return [
-                                        `Satış: ${row.satis_adet || 0}`,
-                                        `Servis: ${row.servis_adet || 0}`,
-                                    ];
-                                },
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 },
-                        },
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: '#eef2f7' },
-                            ticks: {
-                                color: '#64748b',
-                                font: { size: 11 },
-                                callback: value => Number(value || 0).toLocaleString('tr-TR') + ' ₺',
-                            },
-                        },
-                    },
-                },
-            });
-            setTimeout(() => this.dailyChart && this.dailyChart.resize(), 0);
         },
 
         odemeBadgeClass(d) {

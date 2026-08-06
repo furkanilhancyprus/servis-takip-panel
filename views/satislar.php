@@ -394,6 +394,9 @@ include __DIR__ . '/layout/header.php';
                        class="btn btn-sm btn-secondary">
                         <i class="fas fa-file-invoice text-indigo-500"></i> Fatura
                     </a>
+                    <button type="button" class="btn btn-sm btn-primary" @click="openPlanEdit()">
+                        <i class="fas fa-pen-to-square"></i> Planı Düzenle
+                    </button>
                     <button @click="showDetail=false" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
                 </div>
             </div>
@@ -479,9 +482,14 @@ include __DIR__ . '/layout/header.php';
                                     <span class="font-semibold text-emerald-700" x-text="formatCurrency(th.tutar)"></span>
                                     <span class="text-slate-400 ml-2" x-text="formatOdemeYontemi(th.odeme_yontemi)"></span>
                                     <span class="text-slate-400 ml-2" x-text="formatDate(th.tahsilat_tarihi)"></span>
+                                    <span x-show="th.readonly" class="text-xs text-slate-400 ml-2">Peşinat planından gelir</span>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-danger py-0.5 px-2 text-xs"
-                                        @click="deleteTahsilat(th.id, 'satis')">Sil</button>
+                                <div class="flex gap-1" x-show="!th.readonly">
+                                    <button type="button" class="btn btn-sm btn-secondary py-0.5 px-2 text-xs"
+                                            @click="editTahsilat(th)">Düzenle</button>
+                                    <button type="button" class="btn btn-sm btn-danger py-0.5 px-2 text-xs"
+                                            @click="deleteTahsilat(th.id, 'satis')">Sil</button>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -514,11 +522,70 @@ include __DIR__ . '/layout/header.php';
         </div>
     </div>
 
+    <!-- ===== ÖDEME PLANI DÜZENLE MODAL ===== -->
+    <div x-show="showPlanEdit" x-cloak class="modal-backdrop" @click.self="showPlanEdit=false">
+        <div class="modal-box max-w-md">
+            <div class="modal-header">
+                <h3 class="font-semibold">Ödeme Planını Düzenle</h3>
+                <button @click="showPlanEdit=false"><i class="fas fa-times"></i></button>
+            </div>
+            <form @submit.prevent="savePlanEdit()" class="modal-body space-y-4" novalidate>
+                <div class="bg-purple-50 rounded-xl p-4 border border-purple-100 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Satış Toplamı</span>
+                        <span class="font-bold text-purple-700" x-text="formatCurrency(planForm.toplam_tutar || 0)"></span>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                        <span class="text-slate-500">Mevcut Tahsilat</span>
+                        <span class="font-semibold text-emerald-700" x-text="formatCurrency(detail?.odenen_tutar || 0)"></span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="form-label">Peşinat</label>
+                        <input type="number" class="form-input" step="100" min="0" :max="planForm.toplam_tutar" x-model="planForm.pesinat" @input="calcPlanPreview()">
+                    </div>
+                    <div>
+                        <label class="form-label">Taksit Sayısı</label>
+                        <input type="number" class="form-input" step="1" min="1" x-model="planForm.taksit_sayisi" @input="calcPlanPreview()">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="form-label">Peşinat Tarihi</label>
+                        <input type="date" class="form-input" x-model="planForm.pesinat_tarihi">
+                    </div>
+                    <div>
+                        <label class="form-label">İlk Taksit Tarihi</label>
+                        <input type="date" class="form-input" x-model="planForm.ilk_taksit_tarihi">
+                    </div>
+                </div>
+                <div class="rounded-lg bg-slate-50 border border-slate-100 p-3 text-sm space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Taksitlere Dağılacak</span>
+                        <strong x-text="formatCurrency(planForm.kalan || 0)"></strong>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Ortalama Taksit</span>
+                        <strong x-text="formatCurrency(planForm.taksit_tutari || 0)"></strong>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Bu işlem satış kalemlerine ve stoka dokunmaz. Mevcut tahsilatlar korunur ve yeni taksit planına yeniden dağıtılır.
+                </p>
+                <div class="modal-footer px-0 pb-0">
+                    <button type="button" class="btn btn-secondary" @click="showPlanEdit=false">İptal</button>
+                    <button type="submit" class="btn btn-primary" :disabled="saving">Planı Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- ===== TAHSİLAT MODAL (peşin) ===== -->
     <div x-show="showTahsilat" x-cloak class="modal-backdrop" @click.self="showTahsilat=false">
         <div class="modal-box max-w-md">
             <div class="modal-header">
-                <h3 class="font-semibold">Tahsilat Al</h3>
+                <h3 class="font-semibold" x-text="tahsilatForm.id ? 'Tahsilat Düzenle' : 'Tahsilat Al'"></h3>
                 <button @click="showTahsilat=false"><i class="fas fa-times"></i></button>
             </div>
             <form @submit.prevent="saveTahsilat()" class="modal-body space-y-4" novalidate>
@@ -553,7 +620,7 @@ include __DIR__ . '/layout/header.php';
                 </div>
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" @click="showTahsilat=false">İptal</button>
-                    <button type="submit" class="btn btn-success" :disabled="saving">Kaydet</button>
+                    <button type="submit" class="btn btn-success" :disabled="saving" x-text="tahsilatForm.id ? 'Güncelle' : 'Kaydet'"></button>
                 </div>
             </form>
         </div>
@@ -618,7 +685,7 @@ function satislarApp() {
     return {
         satislar: [], loading: false,
         search: '', odemeFiltre: '',
-        showAdd: false, showDetail: false, showTahsilat: false,
+        showAdd: false, showDetail: false, showTahsilat: false, showPlanEdit: false,
         showTaksitOde: false,
         saving: false, detail: null,
         stoklar: [], cihazlar: [],
@@ -633,9 +700,14 @@ function satislarApp() {
             odeme_turu: 'pesin', taksit_sayisi: 3, pesinat: 0, ilk_taksit_tarihi: '',
         },
         tahsilatForm: {
-            musteri_id: '', kaynak_id: '', kaynak_tip: 'satis',
+            id: null, musteri_id: '', kaynak_id: '', kaynak_tip: 'satis',
             musteriAdi: '', kalan: 0, tutar: 0,
             odeme_yontemi: 'nakit', tahsilat_tarihi: new Date().toISOString().split('T')[0],
+        },
+        planForm: {
+            toplam_tutar: 0, pesinat: 0, taksit_sayisi: 1,
+            pesinat_tarihi: '', ilk_taksit_tarihi: '',
+            kalan: 0, taksit_tutari: 0,
         },
         taksitForm: {
             id: null, taksit_no: 0, tutar: 0, vade_tarihi: '',
@@ -832,14 +904,86 @@ function satislarApp() {
             } catch(e) {}
         },
 
+        openPlanEdit() {
+            if (!this.detail) return;
+            const taksitler = this.detail.taksitler || [];
+            const pesinatRow = taksitler.find(t => Number(t.taksit_no) === 0);
+            const firstInstallment = taksitler.find(t => Number(t.taksit_no) > 0);
+            const defaultPesinat = pesinatRow?.tutar ?? this.detail.pesinat ?? (this.detail.odeme_turu === 'pesin' ? this.detail.odenen_tutar : 0);
+            this.planForm = {
+                toplam_tutar: parseFloat(this.detail.toplam_tutar) || 0,
+                pesinat: parseFloat(defaultPesinat) || 0,
+                taksit_sayisi: Math.max(1, parseInt(this.detail.taksit_sayisi || taksitler.filter(t => Number(t.taksit_no) > 0).length || 1)),
+                pesinat_tarihi: (pesinatRow?.vade_tarihi || this.detail.satis_tarihi || new Date().toISOString().split('T')[0]).slice(0, 10),
+                ilk_taksit_tarihi: (firstInstallment?.vade_tarihi || this.detail.satis_tarihi || new Date().toISOString().split('T')[0]).slice(0, 10),
+                kalan: 0,
+                taksit_tutari: 0,
+            };
+            this.calcPlanPreview();
+            this.showPlanEdit = true;
+        },
+
+        calcPlanPreview() {
+            const toplam = parseFloat(this.planForm.toplam_tutar) || 0;
+            const pesinat = Math.min(Math.max(parseFloat(this.planForm.pesinat) || 0, 0), toplam);
+            const taksitSayisi = Math.max(1, parseInt(this.planForm.taksit_sayisi) || 1);
+            this.planForm.pesinat = +pesinat.toFixed(2);
+            this.planForm.taksit_sayisi = taksitSayisi;
+            this.planForm.kalan = +(toplam - pesinat).toFixed(2);
+            this.planForm.taksit_tutari = this.planForm.kalan > 0 ? +(this.planForm.kalan / taksitSayisi).toFixed(2) : 0;
+        },
+
+        async savePlanEdit() {
+            if (!this.detail?.id) return;
+            this.calcPlanPreview();
+            if (!this.planForm.ilk_taksit_tarihi) {
+                showToast('İlk taksit tarihi gerekli.', 'error'); return;
+            }
+            this.saving = true;
+            try {
+                await api(`api/satislar.php?id=${this.detail.id}`, {
+                    method: 'PUT',
+                    body: {
+                        action: 'odeme_plani',
+                        pesinat: this.planForm.pesinat,
+                        taksit_sayisi: this.planForm.taksit_sayisi,
+                        pesinat_tarihi: this.planForm.pesinat_tarihi,
+                        ilk_taksit_tarihi: this.planForm.ilk_taksit_tarihi,
+                    }
+                });
+                showToast('Ödeme planı güncellendi.', 'success');
+                this.showPlanEdit = false;
+                this.detail = await api(`api/satislar.php?id=${this.detail.id}`);
+                await this.loadSatislar();
+            } catch(e) {} finally { this.saving = false; }
+        },
+
         openTahsilat(s) {
             const kalan = Math.max(0, (s.toplam_tutar||0) - (s.odenen_tutar||0));
             this.tahsilatForm = {
-                musteri_id: s.musteri_id, kaynak_id: s.id, kaynak_tip: 'satis',
+                id: null, musteri_id: s.musteri_id, kaynak_id: s.id, kaynak_tip: 'satis',
                 musteriAdi: s.musteri_adi || `${s.ad} ${s.soyad}`,
                 kalan, tutar: kalan,
                 odeme_yontemi: 'nakit',
                 tahsilat_tarihi: new Date().toISOString().split('T')[0],
+            };
+            this.showTahsilat = true;
+        },
+
+        editTahsilat(th) {
+            if (!th || th.readonly || !Number(th.id)) {
+                showToast('Peşinatı ödeme planından düzenleyin.', 'info'); return;
+            }
+            this.tahsilatForm = {
+                id: Number(th.id),
+                musteri_id: th.musteri_id || this.detail?.musteri_id,
+                kaynak_id: th.kaynak_id || this.detail?.id,
+                kaynak_tip: 'satis',
+                musteriAdi: this.detail?.musteri_adi || `${this.detail?.ad || ''} ${this.detail?.soyad || ''}`,
+                kalan: Math.max(0, (this.detail?.toplam_tutar || 0) - (this.detail?.odenen_tutar || 0)) + (parseFloat(th.tutar) || 0),
+                tutar: parseFloat(th.tutar) || 0,
+                odeme_yontemi: th.odeme_yontemi || 'nakit',
+                tahsilat_tarihi: (th.tahsilat_tarihi || new Date().toISOString().split('T')[0]).slice(0, 10),
             };
             this.showTahsilat = true;
         },
@@ -850,9 +994,17 @@ function satislarApp() {
             }
             this.saving = true;
             try {
-                await api('api/tahsilatlar.php', { method: 'POST', body: this.tahsilatForm });
-                showToast('Tahsilat kaydedildi.', 'success');
+                if (this.tahsilatForm.id) {
+                    await api(`api/tahsilatlar.php?id=${this.tahsilatForm.id}`, { method: 'PUT', body: this.tahsilatForm });
+                    showToast('Tahsilat güncellendi.', 'success');
+                } else {
+                    await api('api/tahsilatlar.php', { method: 'POST', body: this.tahsilatForm });
+                    showToast('Tahsilat kaydedildi.', 'success');
+                }
                 this.showTahsilat = false;
+                if (this.detail) {
+                    this.detail = await api(`api/satislar.php?id=${this.detail.id}`);
+                }
                 await this.loadSatislar();
             } catch(e) {} finally { this.saving = false; }
         },
@@ -910,6 +1062,9 @@ function satislarApp() {
         },
 
         async deleteTahsilat(id, tip = 'satis') {
+            if (!Number(id)) {
+                showToast('Peşinatı ödeme planından düzenleyin.', 'info'); return;
+            }
             if (!confirm('Bu tahsilat kaydı silinsin mi? Ödeme durumu yeniden hesaplanacak.')) return;
             try {
                 await api(`api/tahsilatlar.php?id=${id}`, { method: 'DELETE' });

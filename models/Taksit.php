@@ -117,6 +117,73 @@ class Taksit extends Model {
         return true;
     }
 
+    public function planGuncelle(int $satisId, float $toplam, float $pesinat, int $taksitSayisi, string $ilkTarih, ?string $pesinatTarihi = null): void {
+        $satis = $this->db->fetchOne(
+            "SELECT * FROM satislar WHERE id=? AND firma_id=? AND deleted_at IS NULL",
+            [$satisId, $this->firmaId]
+        );
+        if (!$satis) {
+            throw new InvalidArgumentException('Satis bulunamadi.');
+        }
+
+        if ($toplam < 0 || $pesinat < 0 || $pesinat > $toplam) {
+            throw new InvalidArgumentException('Pesinat tutari toplamdan buyuk olamaz.');
+        }
+        if ($taksitSayisi < 1) {
+            $taksitSayisi = 1;
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ilkTarih)) {
+            $ilkTarih = $satis['satis_tarihi'] ?? date('Y-m-d');
+        }
+        $pesinatTarihi = $pesinatTarihi ?: ($satis['satis_tarihi'] ?? $ilkTarih);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $pesinatTarihi)) {
+            $pesinatTarihi = $ilkTarih;
+        }
+
+        $pdo = $this->db->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $this->db->query(
+                "UPDATE taksitler SET deleted_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE satis_id=? AND firma_id=?",
+                [$satisId, $this->firmaId]
+            );
+
+            $stmt = $pdo->prepare("
+                INSERT INTO taksitler (firma_id, satis_id, musteri_id, taksit_no, tutar, odenen_tutar, vade_tarihi, odendi, odeme_tarihi)
+                VALUES (?,?,?,?,?,?,?,?,?)
+            ");
+
+            $musteriId = (int)$satis['musteri_id'];
+            if ($pesinat > 0) {
+                $stmt->execute([$this->firmaId, $satisId, $musteriId, 0, $pesinat, $pesinat, $pesinatTarihi, 1, $pesinatTarihi]);
+            }
+
+            $kalanTutar = max(0, $toplam - $pesinat);
+            if ($kalanTutar > 0) {
+                $taksitTutari = round($kalanTutar / $taksitSayisi, 2);
+                $fark = round($kalanTutar - ($taksitTutari * $taksitSayisi), 2);
+                for ($i = 1; $i <= $taksitSayisi; $i++) {
+                    $tutar = $taksitTutari + ($i === $taksitSayisi ? $fark : 0);
+                    $vadeTarihi = date('Y-m-d', strtotime("$ilkTarih +" . ($i - 1) . " months"));
+                    $stmt->execute([$this->firmaId, $satisId, $musteriId, $i, $tutar, 0, $vadeTarihi, 0, null]);
+                }
+            }
+
+            $odemeTuru = $kalanTutar > 0 ? 'taksitli' : 'pesin';
+            $this->db->query(
+                "UPDATE satislar
+                 SET odeme_turu=?, taksit_sayisi=?, pesinat=?, synced_at=NULL
+                 WHERE id=? AND firma_id=?",
+                [$odemeTuru, $kalanTutar > 0 ? $taksitSayisi : 1, $pesinat, $satisId, $this->firmaId]
+            );
+            $this->updateSatisOdeme($satisId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function updateSatisOdeme(int $satisId): void {
         $pesinat = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(tutar),0) FROM taksitler WHERE satis_id=? AND firma_id=? AND taksit_no=0 AND odendi=1 AND deleted_at IS NULL",

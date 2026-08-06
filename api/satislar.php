@@ -28,6 +28,15 @@ switch (method()) {
         $newId = $m->create($data);
         json_ok(['id' => $newId], 'Satış kaydedildi.');
 
+    case 'PUT':
+        if (!$id) json_err('ID gerekli.');
+        $data = get_input();
+        if (($data['action'] ?? '') === 'odeme_plani') {
+            $m->updateOdemePlani($id, $data);
+            json_ok(null, 'Odeme plani guncellendi.');
+        }
+        json_err('Desteklenmeyen satis guncelleme islemi.', 400);
+
     case 'DELETE':
         if (!$id) json_err('ID gerekli.');
         $m->delete($id);

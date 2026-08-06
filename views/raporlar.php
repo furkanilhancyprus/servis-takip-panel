@@ -17,8 +17,8 @@ include __DIR__ . '/layout/header.php';
             <p class="text-3xl font-bold text-blue-600 mt-1" x-text="stats.toplamServis || '—'"></p>
         </div>
         <div class="stat-card">
-            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Ciro</p>
-            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(karOzet.toplam_ciro || stats.buAyCiro)"></p>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Bu Ay Tahakkuk</p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(karOzet.tahakkuk_ciro || karOzet.toplam_ciro || stats.buAyCiro)"></p>
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Stok Değeri</p>
@@ -30,9 +30,9 @@ include __DIR__ . '/layout/header.php';
     <div class="card p-6">
         <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
             <div>
-                <h3 class="font-semibold text-slate-800">Ciro / Maliyet / Net Kâr</h3>
+                <h3 class="font-semibold text-slate-800">İş Hacmi / Tahakkuk / Net Kâr</h3>
                 <p class="text-sm text-slate-500 mt-1">
-                    Satış ve servis cirosunu, stok maliyetlerini ve net kârı hesaplar. Taksitli satışlarda ciro ve maliyet vade aylarına dağıtılır.
+                    Yapılan işi satış tarihine göre, tahakkuku ise taksit ve servis vade ayına göre hesaplar. Maliyet taksitlere oranlı dağıtılır.
                     <span x-show="doviz.usd_try" x-text="` USD kuru: ${doviz.usd_try.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ₺`"></span>
                 </p>
             </div>
@@ -51,16 +51,21 @@ include __DIR__ . '/layout/header.php';
             </div>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
-                <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Toplam Ciro</p>
-                <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="formatCurrency(karOzet.toplam_ciro || 0)"></p>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="rounded-lg bg-purple-50 border border-purple-100 p-4">
+                <p class="text-xs font-semibold text-purple-600 uppercase tracking-wide">Yapılan İş</p>
+                <p class="text-2xl font-bold text-purple-700 mt-1" x-text="formatCurrency(karOzet.islem_hacmi || 0)"></p>
                 <p class="text-xs text-emerald-600 mt-1" x-text="`${karOzet.satis_adet || 0} satış, ${karOzet.servis_adet || 0} servis`"></p>
             </div>
+            <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
+                <p class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Tahakkuk Ciro</p>
+                <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="formatCurrency(karOzet.tahakkuk_ciro || karOzet.toplam_ciro || 0)"></p>
+                <p class="text-xs text-emerald-600 mt-1" x-text="'Beklenen: ' + formatCurrency(karOzet.beklenen_tahsilat || 0)"></p>
+            </div>
             <div class="rounded-lg bg-orange-50 border border-orange-100 p-4">
-                <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide">Toplam Maliyet</p>
+                <p class="text-xs font-semibold text-orange-600 uppercase tracking-wide">Tahakkuk Maliyet</p>
                 <p class="text-2xl font-bold text-orange-700 mt-1" x-text="formatCurrency(karOzet.toplam_maliyet || 0)"></p>
-                <p class="text-xs text-orange-600 mt-1">Taksitli satışta maliyet taksit aylarına bölünür</p>
+                <p class="text-xs text-orange-600 mt-1">Taksit vadelerine dağıtılır</p>
             </div>
             <div class="rounded-lg border p-4"
                  :class="(karOzet.net_kar || 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'">
@@ -73,14 +78,22 @@ include __DIR__ . '/layout/header.php';
                    :class="(karOzet.net_kar || 0) >= 0 ? 'text-blue-600' : 'text-red-600'"
                    x-text="`Kâr oranı: %${karOzet.kar_orani || 0}`"></p>
             </div>
-            <div class="rounded-lg bg-slate-50 border border-slate-100 p-4 space-y-2 text-sm">
+            <div class="rounded-lg bg-slate-50 border border-slate-100 p-4 space-y-2 text-sm md:col-span-5">
                 <div class="flex justify-between gap-3">
-                    <span class="text-slate-500">Satış Cirosu</span>
-                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.satis_ciro || 0)"></strong>
+                    <span class="text-slate-500">Satış Hacmi</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.satis_hacmi || 0)"></strong>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <span class="text-slate-500">Satış Tahakkuku</span>
+                    <strong class="text-slate-800" x-text="formatCurrency(karOzet.satis_tahakkuk || karOzet.satis_ciro || 0)"></strong>
                 </div>
                 <div class="flex justify-between gap-3">
                     <span class="text-slate-500">Servis Cirosu</span>
                     <strong class="text-slate-800" x-text="formatCurrency(karOzet.servis_ciro || 0)"></strong>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <span class="text-slate-500">Tahsilat</span>
+                    <strong class="text-blue-700" x-text="formatCurrency(karOzet.gercek_tahsilat || karOzet.tahsilat || 0)"></strong>
                 </div>
                 <div class="flex justify-between gap-3 border-t border-slate-200 pt-2">
                     <span class="text-slate-500">Satış Maliyeti</span>
@@ -244,26 +257,30 @@ include __DIR__ . '/layout/header.php';
                 <input x-show="trendMode === 'aylik'" type="month" class="form-input text-xs py-1.5 w-36" x-model="trendAy" @change="loadTrend()">
             </div>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        <div class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+            <div class="rounded-lg bg-purple-50 border border-purple-100 p-3">
+                <p class="text-xs text-purple-500 font-semibold uppercase">Yapılan İş</p>
+                <p class="text-lg font-bold text-purple-700 mt-1" x-text="formatCurrency(trendOzet.islem_hacmi || 0)"></p>
+            </div>
             <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">
-                <p class="text-xs text-slate-500 font-semibold uppercase">Toplam Ciro</p>
-                <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(trendOzet.toplam_ciro)"></p>
+                <p class="text-xs text-slate-500 font-semibold uppercase">Tahakkuk Ciro</p>
+                <p class="text-lg font-bold text-slate-800 mt-1" x-text="formatCurrency(trendOzet.tahakkuk_ciro || trendOzet.toplam_ciro || 0)"></p>
+            </div>
+            <div class="rounded-lg bg-cyan-50 border border-cyan-100 p-3">
+                <p class="text-xs text-cyan-600 font-semibold uppercase">Beklenen</p>
+                <p class="text-lg font-bold text-cyan-700 mt-1" x-text="formatCurrency(trendOzet.beklenen_tahsilat || 0)"></p>
             </div>
             <div class="rounded-lg bg-blue-50 border border-blue-100 p-3">
-                <p class="text-xs text-blue-500 font-semibold uppercase">Gerçek Tahsilat</p>
-                <p class="text-lg font-bold text-blue-700 mt-1" x-text="formatCurrency(trendOzet.tahsilat)"></p>
+                <p class="text-xs text-blue-500 font-semibold uppercase">Tahsilat</p>
+                <p class="text-lg font-bold text-blue-700 mt-1" x-text="formatCurrency(trendOzet.gercek_tahsilat || trendOzet.tahsilat || 0)"></p>
             </div>
             <div class="rounded-lg bg-amber-50 border border-amber-100 p-3">
                 <p class="text-xs text-amber-600 font-semibold uppercase">Net Kâr</p>
                 <p class="text-lg font-bold text-amber-700 mt-1" x-text="formatCurrency(trendOzet.net_kar)"></p>
             </div>
-            <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-3">
-                <p class="text-xs text-indigo-500 font-semibold uppercase">Satış</p>
-                <p class="text-2xl font-bold text-indigo-700 mt-1" x-text="trendOzet.satis_adet"></p>
-            </div>
             <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
-                <p class="text-xs text-emerald-600 font-semibold uppercase">Servis</p>
-                <p class="text-2xl font-bold text-emerald-700 mt-1" x-text="trendOzet.servis_adet"></p>
+                <p class="text-xs text-emerald-600 font-semibold uppercase">İşlem</p>
+                <p class="text-lg font-bold text-emerald-700 mt-1" x-text="`${trendOzet.satis_adet || 0} / ${trendOzet.servis_adet || 0}`"></p>
             </div>
         </div>
         <div class="relative h-64 min-h-64">
@@ -279,8 +296,10 @@ include __DIR__ . '/layout/header.php';
                         <th x-text="trendMode === 'aylik' ? 'Gün' : 'Ay'"></th>
                         <th>Satış</th>
                         <th>Servis</th>
-                        <th>Ciro</th>
-                        <th>Gerçek Tahsilat</th>
+                        <th>Yapılan İş</th>
+                        <th>Tahakkuk</th>
+                        <th>Beklenen</th>
+                        <th>Tahsilat</th>
                         <th>Maliyet</th>
                         <th>Net Kâr</th>
                     </tr>
@@ -291,9 +310,11 @@ include __DIR__ . '/layout/header.php';
                             <td class="font-medium text-slate-700" x-text="row.label"></td>
                             <td x-text="row.satis_adet"></td>
                             <td x-text="row.servis_adet"></td>
-                            <td class="font-semibold" x-text="formatCurrency(row.toplam_ciro)"></td>
-                            <td class="text-blue-700 font-medium" x-text="formatCurrency(row.tahsilat)"></td>
-                            <td x-text="formatCurrency(row.toplam_maliyet)"></td>
+                            <td class="font-semibold text-purple-700" x-text="formatCurrency(row.islem_hacmi || 0)"></td>
+                            <td class="font-semibold" x-text="formatCurrency(row.tahakkuk_ciro || row.toplam_ciro || 0)"></td>
+                            <td class="text-cyan-700 font-medium" x-text="formatCurrency(row.beklenen_tahsilat || 0)"></td>
+                            <td class="text-blue-700 font-medium" x-text="formatCurrency(row.gercek_tahsilat || row.tahsilat || 0)"></td>
+                            <td x-text="formatCurrency(row.tahakkuk_maliyet || row.toplam_maliyet || 0)"></td>
                             <td class="font-semibold" :class="row.net_kar >= 0 ? 'text-emerald-700' : 'text-red-600'" x-text="formatCurrency(row.net_kar)"></td>
                         </tr>
                     </template>
@@ -391,13 +412,17 @@ function raporlarApp() {
                 return this.trendSummary;
             }
             return this.trendData.reduce((acc, row) => {
-                acc.toplam_ciro += Number(row.toplam_ciro || 0);
-                acc.tahsilat += Number(row.tahsilat || 0);
+                acc.islem_hacmi += Number(row.islem_hacmi || 0);
+                acc.tahakkuk_ciro += Number(row.tahakkuk_ciro || row.toplam_ciro || 0);
+                acc.toplam_ciro += Number(row.tahakkuk_ciro || row.toplam_ciro || 0);
+                acc.beklenen_tahsilat += Number(row.beklenen_tahsilat || 0);
+                acc.tahsilat += Number(row.gercek_tahsilat || row.tahsilat || 0);
+                acc.gercek_tahsilat += Number(row.gercek_tahsilat || row.tahsilat || 0);
                 acc.net_kar += Number(row.net_kar || 0);
                 acc.satis_adet += Number(row.satis_adet || 0);
                 acc.servis_adet += Number(row.servis_adet || 0);
                 return acc;
-            }, { toplam_ciro: 0, tahsilat: 0, net_kar: 0, satis_adet: 0, servis_adet: 0 });
+            }, { islem_hacmi: 0, tahakkuk_ciro: 0, toplam_ciro: 0, beklenen_tahsilat: 0, tahsilat: 0, gercek_tahsilat: 0, net_kar: 0, satis_adet: 0, servis_adet: 0 });
         },
 
         renderTrend() {
@@ -416,16 +441,24 @@ function raporlarApp() {
                     datasets: [
                         {
                             type: 'bar',
-                            label: 'Ciro',
-                            data: this.trendData.map(row => Number(row.toplam_ciro || 0)),
+                            label: 'Tahakkuk Ciro',
+                            data: this.trendData.map(row => Number(row.tahakkuk_ciro || row.toplam_ciro || 0)),
                             backgroundColor: '#2563eb',
                             borderRadius: 7,
                             maxBarThickness: 34,
                         },
                         {
+                            type: 'bar',
+                            label: 'Yapılan İş',
+                            data: this.trendData.map(row => Number(row.islem_hacmi || 0)),
+                            backgroundColor: '#7c3aed',
+                            borderRadius: 7,
+                            maxBarThickness: 34,
+                        },
+                        {
                             type: 'line',
-                            label: 'Gerçek Tahsilat',
-                            data: this.trendData.map(row => Number(row.tahsilat || 0)),
+                            label: 'Tahsilat',
+                            data: this.trendData.map(row => Number(row.gercek_tahsilat || row.tahsilat || 0)),
                             borderColor: '#059669',
                             backgroundColor: 'rgba(5,150,105,.12)',
                             tension: 0.35,
@@ -465,8 +498,10 @@ function raporlarApp() {
                                 afterBody: items => {
                                     const row = this.trendData[items[0].dataIndex] || {};
                                     return [
-                                        `Satis cirosu: ${formatCurrency(row.satis_ciro || 0)}`,
+                                        `Satış hacmi: ${formatCurrency(row.satis_hacmi || 0)}`,
+                                        `Satış tahakkuku: ${formatCurrency(row.satis_tahakkuk || row.satis_ciro || 0)}`,
                                         `Servis cirosu: ${formatCurrency(row.servis_ciro || 0)}`,
+                                        `Beklenen tahsilat: ${formatCurrency(row.beklenen_tahsilat || 0)}`,
                                         `Satis adedi: ${row.satis_adet || 0}`,
                                         `Servis adedi: ${row.servis_adet || 0}`,
                                     ];
@@ -528,7 +563,7 @@ function raporlarApp() {
                 },
                 {
                     type: 'line',
-                    label: 'Gerçek Tahsilat',
+                    label: 'Tahsilat',
                     data: this.trendData.map(row => row.tahsilat || 0),
                     borderColor: '#059669',
                     backgroundColor: 'rgba(5,150,105,.12)',

@@ -220,9 +220,12 @@ switch ($tip) {
                 WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
             ", [$usdKur, $fid, $baslangic, $bitis]);
 
+            $satisHacmi = $satisModel->getSatisHacmiByDateRange($baslangic, $bitis);
             $satisCiro = $satisModel->getCiroByDateRange($baslangic, $bitis);
             $servisCiro = (float)($servis['ciro'] ?? 0);
-            $toplamCiro = $satisCiro + $servisCiro;
+            $islemHacmi = $satisHacmi + $servisCiro;
+            $tahakkukCiro = $satisCiro + $servisCiro;
+            $beklenenTahsilat = $tahakkukCiro;
             $toplamMaliyet = $satisMaliyet + $servisMaliyet;
 
             $rows[] = [
@@ -234,12 +237,18 @@ switch ($tip) {
                     WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi) BETWEEN DATE(?) AND DATE(?)
                 ", [$fid, $baslangic, $bitis]),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
-                'satis_ciro' => $satisCiro,
+                'satis_hacmi' => $satisHacmi,
+                'satis_tahakkuk' => $satisCiro,
                 'servis_ciro' => $servisCiro,
-                'toplam_ciro' => $toplamCiro,
+                'islem_hacmi' => $islemHacmi,
+                'tahakkuk_ciro' => $tahakkukCiro,
+                'toplam_ciro' => $tahakkukCiro,
+                'beklenen_tahsilat' => $beklenenTahsilat,
                 'tahsilat' => $tahsilat,
+                'gercek_tahsilat' => $tahsilat,
+                'tahakkuk_maliyet' => $toplamMaliyet,
                 'toplam_maliyet' => $toplamMaliyet,
-                'net_kar' => $toplamCiro - $toplamMaliyet,
+                'net_kar' => $tahakkukCiro - $toplamMaliyet,
             ];
         }
 
@@ -292,8 +301,10 @@ switch ($tip) {
             LEFT JOIN parcalar p ON p.id=sp.parca_id AND p.deleted_at IS NULL
             WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
         ", [$usdKur, $fid, $yilBaslangic, $yilBitis]);
-        $ozetToplamCiro = (float)($ozetSatis['ciro'] ?? 0) + (float)($ozetServis['ciro'] ?? 0);
-        $ozetToplamMaliyet = $ozetSatisMaliyet + $ozetServisMaliyet;
+        $ozetIslemHacmi = (float)($ozetSatis['ciro'] ?? 0) + (float)($ozetServis['ciro'] ?? 0);
+        $ozetTahakkukCiro = array_sum(array_map(fn($row) => (float)($row['tahakkuk_ciro'] ?? $row['toplam_ciro'] ?? 0), $rows));
+        $ozetBeklenenTahsilat = array_sum(array_map(fn($row) => (float)($row['beklenen_tahsilat'] ?? 0), $rows));
+        $ozetToplamMaliyet = array_sum(array_map(fn($row) => (float)($row['tahakkuk_maliyet'] ?? $row['toplam_maliyet'] ?? 0), $rows));
 
         echo json_encode([
             'success' => true,
@@ -302,13 +313,16 @@ switch ($tip) {
                 'usd_try' => $usdKur,
                 'aylar' => $rows,
                 'ozet' => [
-                    'toplam_ciro' => $ozetToplamCiro,
+                    'islem_hacmi' => $ozetIslemHacmi,
+                    'tahakkuk_ciro' => $ozetTahakkukCiro,
+                    'toplam_ciro' => $ozetTahakkukCiro,
+                    'beklenen_tahsilat' => $ozetBeklenenTahsilat,
                     'tahsilat' => $ozetTahsilat,
-                    'net_kar' => $ozetToplamCiro - $ozetToplamMaliyet,
+                    'gercek_tahsilat' => $ozetTahsilat,
+                    'net_kar' => $ozetTahakkukCiro - $ozetToplamMaliyet,
                     'satis_adet' => (int)($ozetSatis['adet'] ?? 0),
                     'servis_adet' => (int)($ozetServis['adet'] ?? 0),
                     'toplam_maliyet' => $ozetToplamMaliyet,
-                    'tahakkuk_ciro' => array_sum(array_map(fn($row) => (float)($row['toplam_ciro'] ?? 0), $rows)),
                 ],
             ],
         ], JSON_UNESCAPED_UNICODE);
@@ -330,11 +344,16 @@ switch ($tip) {
 
         $rows = [];
         $ozet = [
+            'islem_hacmi' => 0.0,
+            'tahakkuk_ciro' => 0.0,
             'toplam_ciro' => 0.0,
+            'beklenen_tahsilat' => 0.0,
             'tahsilat' => 0.0,
+            'gercek_tahsilat' => 0.0,
             'net_kar' => 0.0,
             'satis_adet' => 0,
             'servis_adet' => 0,
+            'tahakkuk_maliyet' => 0.0,
             'toplam_maliyet' => 0.0,
         ];
 
@@ -369,9 +388,12 @@ switch ($tip) {
                 WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi)=DATE(?)
             ", [$usdKur, $fid, $tarihGun]);
 
+            $satisHacmi = $satisModel->getSatisHacmiByDateRange($tarihGun, $tarihGun);
             $satisCiro = $satisModel->getCiroByDateRange($tarihGun, $tarihGun);
             $servisCiro = (float)($servis['ciro'] ?? 0);
-            $toplamCiro = $satisCiro + $servisCiro;
+            $islemHacmi = $satisHacmi + $servisCiro;
+            $tahakkukCiro = $satisCiro + $servisCiro;
+            $beklenenTahsilat = $tahakkukCiro;
             $toplamMaliyet = $satisMaliyet + $servisMaliyet;
             $satisAdet = (int)$db->fetchColumn("
                 SELECT COUNT(*)
@@ -379,7 +401,7 @@ switch ($tip) {
                 WHERE firma_id=? AND deleted_at IS NULL AND DATE(satis_tarihi)=DATE(?)
             ", [$fid, $tarihGun]);
             $servisAdet = (int)($servis['adet'] ?? 0);
-            $netKar = $toplamCiro - $toplamMaliyet;
+            $netKar = $tahakkukCiro - $toplamMaliyet;
 
             $rows[] = [
                 'key' => $tarihGun,
@@ -388,20 +410,31 @@ switch ($tip) {
                 'tarih' => $tarihGun,
                 'satis_adet' => $satisAdet,
                 'servis_adet' => $servisAdet,
-                'satis_ciro' => $satisCiro,
+                'satis_hacmi' => $satisHacmi,
+                'satis_tahakkuk' => $satisCiro,
                 'servis_ciro' => $servisCiro,
-                'toplam_ciro' => $toplamCiro,
+                'islem_hacmi' => $islemHacmi,
+                'tahakkuk_ciro' => $tahakkukCiro,
+                'toplam_ciro' => $tahakkukCiro,
+                'beklenen_tahsilat' => $beklenenTahsilat,
                 'tahsilat' => $tahsilat,
+                'gercek_tahsilat' => $tahsilat,
+                'tahakkuk_maliyet' => $toplamMaliyet,
                 'toplam_maliyet' => $toplamMaliyet,
                 'net_kar' => $netKar,
             ];
 
-            $ozet['toplam_ciro'] += $toplamCiro;
+            $ozet['islem_hacmi'] = ($ozet['islem_hacmi'] ?? 0) + $islemHacmi;
+            $ozet['tahakkuk_ciro'] = ($ozet['tahakkuk_ciro'] ?? 0) + $tahakkukCiro;
+            $ozet['toplam_ciro'] += $tahakkukCiro;
+            $ozet['beklenen_tahsilat'] = ($ozet['beklenen_tahsilat'] ?? 0) + $beklenenTahsilat;
             $ozet['tahsilat'] += $tahsilat;
+            $ozet['gercek_tahsilat'] = ($ozet['gercek_tahsilat'] ?? 0) + $tahsilat;
             $ozet['net_kar'] += $netKar;
             $ozet['satis_adet'] += $satisAdet;
             $ozet['servis_adet'] += $servisAdet;
             $ozet['toplam_maliyet'] += $toplamMaliyet;
+            $ozet['tahakkuk_maliyet'] = ($ozet['tahakkuk_maliyet'] ?? 0) + $toplamMaliyet;
         }
 
         echo json_encode([
@@ -446,9 +479,20 @@ switch ($tip) {
             WHERE s.firma_id=? AND sp.deleted_at IS NULL AND DATE(s.tamamlanma_tarihi) BETWEEN DATE(?) AND DATE(?)
         ", [$usdKur, $fid, $baslangic, $bitis]);
 
+        $gercekTahsilat = (float)$db->fetchColumn("
+            SELECT COALESCE(SUM(tutar),0)
+            FROM tahsilatlar
+            WHERE firma_id=? AND deleted_at IS NULL
+              AND DATE(tahsilat_tarihi) BETWEEN DATE(?) AND DATE(?)
+              AND DATE(tahsilat_tarihi) <= DATE('now')
+        ", [$fid, $baslangic, $bitis]);
+
+        $satisHacmi = $satisModel->getSatisHacmiByDateRange($baslangic, $bitis);
         $satisCiro = $satisModel->getCiroByDateRange($baslangic, $bitis);
         $servisCiro = (float)($servis['ciro'] ?? 0);
+        $islemHacmi = $satisHacmi + $servisCiro;
         $toplamCiro = $satisCiro + $servisCiro;
+        $beklenenTahsilat = $toplamCiro;
         $toplamMaliyet = $satisMaliyet + $servisMaliyet;
         $netKar = $toplamCiro - $toplamMaliyet;
 
@@ -460,11 +504,19 @@ switch ($tip) {
                 'usd_try' => $usdKur,
                 'satis_adet' => $satisModel->getGercekAdetByDateRange($baslangic, $bitis),
                 'servis_adet' => (int)($servis['adet'] ?? 0),
+                'satis_hacmi' => $satisHacmi,
                 'satis_ciro' => $satisCiro,
+                'satis_tahakkuk' => $satisCiro,
                 'servis_ciro' => $servisCiro,
+                'islem_hacmi' => $islemHacmi,
+                'tahakkuk_ciro' => $toplamCiro,
                 'toplam_ciro' => $toplamCiro,
+                'beklenen_tahsilat' => $beklenenTahsilat,
+                'gercek_tahsilat' => $gercekTahsilat,
+                'tahsilat' => $gercekTahsilat,
                 'satis_maliyet' => $satisMaliyet,
                 'servis_maliyet' => $servisMaliyet,
+                'tahakkuk_maliyet' => $toplamMaliyet,
                 'toplam_maliyet' => $toplamMaliyet,
                 'net_kar' => $netKar,
                 'kar_orani' => $toplamCiro > 0 ? round(($netKar / $toplamCiro) * 100, 2) : 0,

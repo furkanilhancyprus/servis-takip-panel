@@ -233,6 +233,28 @@ class Satis extends Model {
         $this->db->query("UPDATE satislar SET deleted_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=? AND deleted_at IS NULL", [$id, $this->firmaId]);
     }
 
+    public function updateOdemePlani(int $id, array $data): void {
+        $satis = $this->db->fetchOne(
+            "SELECT * FROM satislar WHERE id=? AND firma_id=? AND deleted_at IS NULL",
+            [$id, $this->firmaId]
+        );
+        if (!$satis) {
+            throw new InvalidArgumentException('Satis bulunamadi.');
+        }
+
+        $toplam = (float)$satis['toplam_tutar'];
+        $pesinat = max(0, (float)($data['pesinat'] ?? $satis['pesinat'] ?? 0));
+        $taksitSayisi = max(1, (int)($data['taksit_sayisi'] ?? $satis['taksit_sayisi'] ?? 1));
+        $ilkTaksitTarihi = trim((string)($data['ilk_taksit_tarihi'] ?? ''));
+        if ($ilkTaksitTarihi === '') {
+            $ilkTaksitTarihi = $satis['satis_tarihi'] ?? date('Y-m-d');
+        }
+        $pesinatTarihi = trim((string)($data['pesinat_tarihi'] ?? $satis['satis_tarihi'] ?? $ilkTaksitTarihi));
+
+        require_once __DIR__ . '/Taksit.php';
+        (new Taksit())->planGuncelle($id, $toplam, $pesinat, $taksitSayisi, $ilkTaksitTarihi, $pesinatTarihi);
+    }
+
     public function getBuAyToplam(): float {
         return $this->getCiroByDateRange(date('Y-m-01'), date('Y-m-t'));
     }
