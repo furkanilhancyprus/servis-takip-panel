@@ -360,7 +360,7 @@ class Satis extends Model {
                   AND s.odeme_turu <> 'taksitli'
                   AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
                 GROUP BY s.id
-            )",
+            ) pesin_satis_maliyetleri",
             [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
         );
 
@@ -394,7 +394,7 @@ class Satis extends Model {
                     FROM taksitler t
                     WHERE t.satis_id=s.id AND t.firma_id=s.firma_id AND t.deleted_at IS NULL
                   ) BETWEEN DATE(?) AND DATE(?)
-             )",
+             ) taksitli_satis_maliyetleri",
             [$usdKur, $usdKur, $this->firmaId, $baslangic, $bitis]
         );
 

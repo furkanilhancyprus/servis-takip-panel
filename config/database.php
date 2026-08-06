@@ -195,6 +195,9 @@ class Database {
         $sql = preg_replace("/strftime\\('%Y-%m',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%Y-%m')", $sql);
         $sql = preg_replace("/strftime\\('%Y',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%Y')", $sql);
         $sql = preg_replace("/strftime\\('%m',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%m')", $sql);
+        $sql = preg_replace("/CAST\\(julianday\\('now'\\)\\s*-\\s*julianday\\(([^\\)]+)\\)\\s+AS\\s+INTEGER\\)/i", "DATEDIFF(CURRENT_DATE, $1)", $sql);
+        $sql = preg_replace("/CAST\\(julianday\\(([^\\)]+)\\)\\s*-\\s*julianday\\('now'\\)\\s+AS\\s+INTEGER\\)/i", "DATEDIFF($1, CURRENT_DATE)", $sql);
+        $sql = preg_replace('/CAST\\(([^\\)]+)\\s+AS\\s+INTEGER\\)/i', 'CAST($1 AS SIGNED)', $sql);
         $sql = preg_replace("/([a-zA-Z0-9_\\.]+)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*([a-zA-Z0-9_\\.]+)/", "CONCAT($1, ' ', $2)", $sql);
         $sql = preg_replace("/COALESCE\\(([^\\),]+),\\s*''\\)\\s*\\|\\|\\s*' '\\s*\\|\\|\\s*COALESCE\\(([^\\),]+),\\s*''\\)/", "CONCAT(COALESCE($1, ''), ' ', COALESCE($2, ''))", $sql);
         $sql = str_replace('SUM(MAX(0, tutar-COALESCE(odenen_tutar,0)))', 'SUM(GREATEST(0, tutar-COALESCE(odenen_tutar,0)))', $sql);

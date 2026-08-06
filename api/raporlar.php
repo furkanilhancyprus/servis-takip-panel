@@ -288,7 +288,7 @@ switch ($tip) {
                 LEFT JOIN parcalar cp ON cp.id=c.parca_id AND cp.deleted_at IS NULL
                 WHERE s.firma_id=? AND s.deleted_at IS NULL AND DATE(s.satis_tarihi) BETWEEN DATE(?) AND DATE(?)
                 GROUP BY s.id
-            )
+            ) ozet_satis_maliyetleri
         ", [$usdKur, $usdKur, $fid, $yilBaslangic, $yilBitis]);
         $ozetServisMaliyet = (float)$db->fetchColumn("
             SELECT COALESCE(SUM(

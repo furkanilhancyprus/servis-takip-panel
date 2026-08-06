@@ -157,7 +157,7 @@ $gunlukSatisCiro = $_db->fetchAll("
           AND s.odeme_turu='taksitli'
           AND DATE(t.vade_tarihi) BETWEEN DATE(?) AND DATE(?)
         GROUP BY DATE(t.vade_tarihi)
-    )
+    ) gunluk_satis_cirolari
     GROUP BY tarih
 ", [$_SESSION['firma_id'], $ayBaslangic, $ayBitis, $_SESSION['firma_id'], $_SESSION['firma_id'], $ayBaslangic, $ayBitis]);
 foreach ($gunlukSatisCiro as $row) {
