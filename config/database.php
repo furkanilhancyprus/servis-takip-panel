@@ -188,7 +188,7 @@ class Database {
         ];
         $sql = str_replace(array_keys($schemaReplacements), array_values($schemaReplacements), $sql);
         $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+DEFAULT\\s+)/i', '$1VARCHAR(255)$2', $sql);
-        $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+UNIQUE)/i', '$1VARCHAR(255)$2', $sql);
+        $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+UNIQUE)/i', '$1VARCHAR(191)$2', $sql);
         $sql = preg_replace('/(\\b[a-zA-Z0-9_]+\\s+)TEXT(\\s+NOT\\s+NULL\\s+CHECK)/i', '$1VARCHAR(255)$2', $sql);
 
         $sql = preg_replace("/strftime\\('%Y-%m',\\s*([a-zA-Z0-9_\\.]+)\\)/", "DATE_FORMAT($1, '%Y-%m')", $sql);
