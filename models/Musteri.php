@@ -19,7 +19,7 @@ class Musteri extends Model {
             LEFT JOIN periyodik_bakimlar pb ON m.id = pb.musteri_id AND pb.deleted_at IS NULL
             $where
             GROUP BY m.id
-            ORDER BY m.ad COLLATE NOCASE ASC, m.soyad COLLATE NOCASE ASC, m.created_at DESC
+            ORDER BY LOWER(m.ad) ASC, LOWER(m.soyad) ASC, m.created_at DESC
         ", $params);
 
         if ($search !== '') {

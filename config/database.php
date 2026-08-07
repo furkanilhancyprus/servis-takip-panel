@@ -630,6 +630,8 @@ class Database {
                 tedarikci_adi     TEXT NOT NULL,
                 fatura_no         TEXT,
                 alim_tarihi       DATE DEFAULT (date('now')),
+                para_birimi       TEXT DEFAULT 'TRY',
+                usd_kur           REAL DEFAULT 0,
                 toplam_tutar      REAL DEFAULT 0,
                 odenen_tutar      REAL DEFAULT 0,
                 odeme_durumu      TEXT DEFAULT 'odenmedi',
@@ -668,6 +670,8 @@ class Database {
                 firma_id          INTEGER NOT NULL DEFAULT 0,
                 alim_id           INTEGER NOT NULL,
                 tutar             REAL DEFAULT 0,
+                para_birimi       TEXT DEFAULT 'TRY',
+                usd_kur           REAL DEFAULT 0,
                 odeme_yontemi     TEXT DEFAULT 'nakit',
                 odeme_tarihi      DATE DEFAULT (date('now')),
                 notlar            TEXT,
@@ -795,6 +799,10 @@ class Database {
             ['kullanicilar', 'abonelik_durumu', "ALTER TABLE kullanicilar ADD COLUMN abonelik_durumu TEXT DEFAULT 'aktif'"],
             ['kullanicilar', 'abonelik_bitis', "ALTER TABLE kullanicilar ADD COLUMN abonelik_bitis DATE"],
             ['admin_users', 'role', "ALTER TABLE admin_users ADD COLUMN role TEXT DEFAULT 'super_admin'"],
+            ['tedarikci_alimlari', 'para_birimi', "ALTER TABLE tedarikci_alimlari ADD COLUMN para_birimi TEXT DEFAULT 'TRY'"],
+            ['tedarikci_alimlari', 'usd_kur', "ALTER TABLE tedarikci_alimlari ADD COLUMN usd_kur REAL DEFAULT 0"],
+            ['tedarikci_odemeleri', 'para_birimi', "ALTER TABLE tedarikci_odemeleri ADD COLUMN para_birimi TEXT DEFAULT 'TRY'"],
+            ['tedarikci_odemeleri', 'usd_kur', "ALTER TABLE tedarikci_odemeleri ADD COLUMN usd_kur REAL DEFAULT 0"],
         ];
         $syncTables = [
             'kullanicilar', 'musteriler', 'standart_islemler', 'periyodik_bakimlar',

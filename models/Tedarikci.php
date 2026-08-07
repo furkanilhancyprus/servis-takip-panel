@@ -8,7 +8,16 @@ class Tedarikci extends Model {
                    COUNT(a.id) AS alim_sayisi,
                    COALESCE(SUM(a.toplam_tutar),0) AS toplam_alim,
                    COALESCE(SUM(a.odenen_tutar),0) AS toplam_odenen,
-                   COALESCE(SUM(a.toplam_tutar - a.odenen_tutar),0) AS kalan_borc
+                   COALESCE(SUM(a.toplam_tutar - a.odenen_tutar),0) AS kalan_borc,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN a.toplam_tutar ELSE 0 END),0) AS toplam_alim_usd,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN a.odenen_tutar ELSE 0 END),0) AS toplam_odenen_usd,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN a.toplam_tutar - a.odenen_tutar ELSE 0 END),0) AS kalan_borc_usd,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN a.toplam_tutar * COALESCE(a.usd_kur,0) ELSE 0 END),0) AS toplam_alim_usd_tl,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN a.odenen_tutar * COALESCE(a.usd_kur,0) ELSE 0 END),0) AS toplam_odenen_usd_tl,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')='USD' THEN (a.toplam_tutar - a.odenen_tutar) * COALESCE(a.usd_kur,0) ELSE 0 END),0) AS kalan_borc_usd_tl,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')<>'USD' THEN a.toplam_tutar ELSE 0 END),0) AS toplam_alim_try,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')<>'USD' THEN a.odenen_tutar ELSE 0 END),0) AS toplam_odenen_try,
+                   COALESCE(SUM(CASE WHEN COALESCE(a.para_birimi,'TRY')<>'USD' THEN a.toplam_tutar - a.odenen_tutar ELSE 0 END),0) AS kalan_borc_try
             FROM tedarikciler t
             LEFT JOIN tedarikci_alimlari a
               ON a.firma_id=t.firma_id
@@ -120,6 +129,14 @@ class Tedarikci extends Model {
         if (!$kalemler) {
             throw new InvalidArgumentException('En az bir urun secilmelidir.');
         }
+        $paraBirimi = strtoupper(trim((string)($data['para_birimi'] ?? 'TRY')));
+        if (!in_array($paraBirimi, ['TRY', 'USD'], true)) {
+            $paraBirimi = 'TRY';
+        }
+        $usdKur = max(0, (float)($data['usd_kur'] ?? 0));
+        if ($paraBirimi === 'USD' && $usdKur <= 0) {
+            throw new InvalidArgumentException('USD alimi icin kur girilmelidir.');
+        }
 
         $toplam = 0.0;
         foreach ($kalemler as $kalem) {
@@ -137,13 +154,15 @@ class Tedarikci extends Model {
         try {
             $id = $this->db->execute("
                 INSERT INTO tedarikci_alimlari
-                    (firma_id, tedarikci_adi, fatura_no, alim_tarihi, toplam_tutar, odenen_tutar, odeme_durumu, notlar, uuid)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                    (firma_id, tedarikci_adi, fatura_no, alim_tarihi, para_birimi, usd_kur, toplam_tutar, odenen_tutar, odeme_durumu, notlar, uuid)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ", [
                 $this->firmaId,
                 $tedarikciAdi,
                 $data['fatura_no'] ?? null,
                 $tarih,
+                $paraBirimi,
+                $usdKur,
                 $toplam,
                 $pesinOdeme,
                 $durum,
@@ -157,15 +176,20 @@ class Tedarikci extends Model {
             ");
             $stokArtir = $pdo->prepare("
                 UPDATE parcalar
-                SET stok_miktari=stok_miktari+?, updated_at=CURRENT_TIMESTAMP, synced_at=NULL
+                SET stok_miktari=stok_miktari+?,
+                    maliyet_usd=CASE WHEN ? > 0 THEN ? ELSE maliyet_usd END,
+                    tedarikci=?,
+                    updated_at=CURRENT_TIMESTAMP,
+                    synced_at=NULL
                 WHERE id=? AND firma_id=? AND deleted_at IS NULL
             ");
             foreach ($kalemler as $kalem) {
                 $parcaId = (int)$kalem['parca_id'];
                 $miktar = max(1, (int)($kalem['miktar'] ?? 1));
                 $birim = max(0, (float)($kalem['birim_fiyat'] ?? 0));
+                $maliyetUsd = $this->birimMaliyetUsd($birim, $paraBirimi, $usdKur);
                 $insertKalem->execute([$id, $parcaId, $miktar, $birim, $this->uuid()]);
-                $stokArtir->execute([$miktar, $parcaId, $this->firmaId]);
+                $stokArtir->execute([$miktar, $maliyetUsd, $maliyetUsd, $tedarikciAdi, $parcaId, $this->firmaId]);
                 if ($stokArtir->rowCount() !== 1) {
                     throw new InvalidArgumentException('Stok kaydi bulunamadi veya bu firmaya ait degil.');
                 }
@@ -173,12 +197,14 @@ class Tedarikci extends Model {
 
             if ($pesinOdeme > 0) {
                 $this->db->execute("
-                    INSERT INTO tedarikci_odemeleri (firma_id, alim_id, tutar, odeme_yontemi, odeme_tarihi, notlar, uuid)
-                    VALUES (?,?,?,?,?,?,?)
+                    INSERT INTO tedarikci_odemeleri (firma_id, alim_id, tutar, para_birimi, usd_kur, odeme_yontemi, odeme_tarihi, notlar, uuid)
+                    VALUES (?,?,?,?,?,?,?,?,?)
                 ", [
                     $this->firmaId,
                     $id,
                     $pesinOdeme,
+                    $paraBirimi,
+                    $usdKur,
                     $data['odeme_yontemi'] ?? 'nakit',
                     $tarih,
                     'Alim kaydi sirasinda odendi',
@@ -195,18 +221,20 @@ class Tedarikci extends Model {
     }
 
     public function odemeEkle(int $alimId, array $data): int {
-        $this->requireAlim($alimId);
+        $alim = $this->requireAlim($alimId);
         $tutar = (float)($data['tutar'] ?? 0);
         if ($tutar < 0) {
             throw new InvalidArgumentException('Gecersiz odeme tutari.');
         }
         $id = $this->db->execute("
-            INSERT INTO tedarikci_odemeleri (firma_id, alim_id, tutar, odeme_yontemi, odeme_tarihi, notlar, uuid)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO tedarikci_odemeleri (firma_id, alim_id, tutar, para_birimi, usd_kur, odeme_yontemi, odeme_tarihi, notlar, uuid)
+            VALUES (?,?,?,?,?,?,?,?,?)
         ", [
             $this->firmaId,
             $alimId,
             $tutar,
+            $alim['para_birimi'] ?? 'TRY',
+            $alim['usd_kur'] ?? 0,
             $data['odeme_yontemi'] ?? 'nakit',
             $data['odeme_tarihi'] ?? date('Y-m-d'),
             $data['notlar'] ?? null,
@@ -269,13 +297,24 @@ class Tedarikci extends Model {
         );
     }
 
-    private function requireAlim(int $id): void {
-        $ok = $this->db->fetchColumn(
-            "SELECT id FROM tedarikci_alimlari WHERE id=? AND firma_id=? AND deleted_at IS NULL",
+    private function requireAlim(int $id): array {
+        $row = $this->db->fetchOne(
+            "SELECT id, para_birimi, usd_kur FROM tedarikci_alimlari WHERE id=? AND firma_id=? AND deleted_at IS NULL",
             [$id, $this->firmaId]
         );
-        if (!$ok) {
+        if (!$row) {
             throw new InvalidArgumentException('Tedarikci alimi bulunamadi.');
         }
+        return $row;
+    }
+
+    private function birimMaliyetUsd(float $birim, string $paraBirimi, float $usdKur): float {
+        if ($birim <= 0) {
+            return 0.0;
+        }
+        if ($paraBirimi === 'USD') {
+            return round($birim, 4);
+        }
+        return $usdKur > 0 ? round($birim / $usdKur, 4) : 0.0;
     }
 }

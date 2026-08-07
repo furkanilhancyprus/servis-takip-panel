@@ -12,11 +12,13 @@ include __DIR__ . '/layout/header.php';
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Toplam Borç</p>
-            <p class="text-2xl font-bold text-red-600 mt-1" x-text="formatCurrency(toplamBorc)"></p>
+            <p class="text-2xl font-bold text-red-600 mt-1" x-text="formatCurrency(toplamBorcTl)"></p>
+            <p class="text-xs text-slate-400 mt-1" x-show="toplamBorcUsd > 0" x-text="formatUsdAmount(toplamBorcUsd) + ' dahil'"></p>
         </div>
         <div class="stat-card">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Ödenen</p>
-            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(toplamOdenen)"></p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCurrency(toplamOdenenTl)"></p>
+            <p class="text-xs text-slate-400 mt-1" x-show="doviz.usd_try" x-text="'USD kuru: ' + Number(doviz.usd_try).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' TL'"></p>
         </div>
         <div class="stat-card flex items-center justify-between gap-3">
             <div>
@@ -60,8 +62,11 @@ include __DIR__ . '/layout/header.php';
                             <td class="font-semibold text-slate-800" x-text="s.ad"></td>
                             <td class="text-slate-600" x-text="s.yetkili || '—'"></td>
                             <td class="text-slate-600" x-text="s.telefon || '—'"></td>
-                            <td class="font-semibold text-slate-700" x-text="formatCurrency(s.toplam_alim || 0)"></td>
-                            <td class="font-semibold" :class="Number(s.kalan_borc || 0) > 0 ? 'text-red-600' : 'text-emerald-600'" x-text="formatCurrency(s.kalan_borc || 0)"></td>
+                            <td class="font-semibold text-slate-700" x-text="formatCurrency(supplierTotalTl(s))"></td>
+                            <td>
+                                <p class="font-semibold" :class="supplierDebtTl(s) > 0 ? 'text-red-600' : 'text-emerald-600'" x-text="formatCurrency(supplierDebtTl(s))"></p>
+                                <p class="text-xs text-slate-400" x-show="Number(s.kalan_borc_usd || 0) > 0" x-text="formatUsdAmount(s.kalan_borc_usd)"></p>
+                            </td>
                             <td class="text-slate-500 text-sm" x-text="s.notlar || '—'"></td>
                             <td class="text-right">
                                 <button class="btn btn-sm btn-secondary btn-icon" @click="editSupplier(s)" title="Düzenle"><i class="fas fa-pen"></i></button>
@@ -85,36 +90,46 @@ include __DIR__ . '/layout/header.php';
             </button>
         </div>
         <div class="overflow-x-auto">
-            <table class="data-table min-w-[920px]">
+            <table class="data-table min-w-[1080px]">
                 <thead>
                     <tr>
                         <th>Tarih</th>
                         <th>Tedarikçi</th>
                         <th>Fatura</th>
                         <th>Kalem</th>
+                        <th>Para</th>
                         <th>Toplam</th>
                         <th>Ödenen</th>
                         <th>Kalan</th>
+                        <th>Güncel TL Borç</th>
                         <th>Durum</th>
                         <th class="text-right">İşlem</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="9" class="text-center py-8"><span class="spinner"></span></td></tr>
+                        <tr><td colspan="11" class="text-center py-8"><span class="spinner"></span></td></tr>
                     </template>
                     <template x-if="!loading && filteredAlimlar.length === 0">
-                        <tr><td colspan="9" class="text-center py-8 text-slate-400">Alım kaydı yok.</td></tr>
+                        <tr><td colspan="11" class="text-center py-8 text-slate-400">Alım kaydı yok.</td></tr>
                     </template>
                     <template x-for="a in filteredAlimlar" :key="a.id">
                         <tr class="hover:bg-slate-50">
                             <td x-text="formatDate(a.alim_tarihi)"></td>
                             <td class="font-semibold text-slate-700" x-text="a.tedarikci_adi"></td>
                             <td class="text-slate-500" x-text="a.fatura_no || '—'"></td>
-                            <td x-text="`${a.kalem_sayisi || 0} kalem / ${a.toplam_adet || 0} adet`"></td>
-                            <td class="font-semibold" x-text="formatCurrency(a.toplam_tutar)"></td>
-                            <td class="text-emerald-600 font-semibold" x-text="formatCurrency(a.odenen_tutar)"></td>
-                            <td class="text-red-600 font-semibold" x-text="formatCurrency(Math.max(0, a.kalan_tutar || 0))"></td>
+                            <td>
+                                <p class="font-semibold text-slate-700" x-text="`${a.kalem_sayisi || 0} kalem`"></p>
+                                <p class="text-xs text-slate-400" x-text="`${a.toplam_adet || 0} adet`"></p>
+                            </td>
+                            <td><span class="badge" :class="currencyOf(a) === 'USD' ? 'badge-blue' : 'badge-gray'" x-text="currencyOf(a)"></span></td>
+                            <td class="font-semibold" x-text="formatMoney(a.toplam_tutar, currencyOf(a))"></td>
+                            <td class="text-emerald-600 font-semibold" x-text="formatMoney(a.odenen_tutar, currencyOf(a))"></td>
+                            <td class="text-red-600 font-semibold" x-text="formatMoney(Math.max(0, a.kalan_tutar || 0), currencyOf(a))"></td>
+                            <td>
+                                <p class="font-semibold text-slate-800" x-text="formatCurrency(rowDebtTl(a))"></p>
+                                <p class="text-xs text-slate-400" x-show="currencyOf(a) === 'USD'" x-text="'Kur: ' + rowUsdRate(a).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })"></p>
+                            </td>
                             <td><span class="badge" :class="odemeBadgeClass(a.odeme_durumu)" x-text="odemeBadgeText(a.odeme_durumu)"></span></td>
                             <td class="text-right">
                                 <button class="btn btn-sm btn-secondary btn-icon" @click="viewAlim(a)" title="Detay"><i class="fas fa-eye"></i></button>
@@ -154,6 +169,25 @@ include __DIR__ . '/layout/header.php';
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="form-label">Para Birimi</label>
+                        <select class="form-select" x-model="form.para_birimi" @change="syncKur()">
+                            <option value="TRY">TL</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">USD Kuru</label>
+                        <input type="number" class="form-input" min="0" step="0.0001" x-model="form.usd_kur" :disabled="form.para_birimi !== 'USD' && !doviz.usd_try">
+                        <p class="text-xs text-slate-400 mt-1" x-show="form.para_birimi === 'USD'">Güncel TL borç bu kurla gösterilir.</p>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <p class="text-xs text-slate-500 font-semibold uppercase">TL Karşılığı</p>
+                        <p class="text-xl font-bold text-slate-800 mt-1" x-text="formatCurrency(formTotalTl())"></p>
+                    </div>
+                </div>
+
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="form-label mb-0">Alınan Mallar</label>
@@ -169,7 +203,7 @@ include __DIR__ . '/layout/header.php';
                                     </template>
                                 </select>
                                 <input type="number" class="form-input col-span-4 md:col-span-2 text-center" min="1" x-model="k.miktar" @input="calcTotal()" placeholder="Adet">
-                                <input type="number" class="form-input col-span-6 md:col-span-3" min="0" step="100" x-model="k.birim_fiyat" @input="calcTotal()" placeholder="Alış fiyatı">
+                                <input type="number" class="form-input col-span-6 md:col-span-3" min="0" :step="form.para_birimi === 'USD' ? '0.01' : '100'" x-model="k.birim_fiyat" @input="calcTotal()" :placeholder="form.para_birimi === 'USD' ? 'Alış fiyatı ($)' : 'Alış fiyatı (TL)'">
                                 <button type="button" class="btn btn-danger btn-icon col-span-2 md:col-span-1" @click="form.kalemler.splice(i,1); calcTotal()"><i class="fas fa-times text-xs"></i></button>
                             </div>
                         </template>
@@ -179,11 +213,11 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
                         <p class="text-xs text-blue-500 font-semibold uppercase">Toplam</p>
-                        <p class="text-2xl font-bold text-blue-700 mt-1" x-text="formatCurrency(form.toplam_tutar)"></p>
+                        <p class="text-2xl font-bold text-blue-700 mt-1" x-text="formatMoney(form.toplam_tutar, form.para_birimi)"></p>
                     </div>
                     <div>
                         <label class="form-label">İlk Ödeme</label>
-                        <input type="number" class="form-input" min="0" step="100" x-model="form.odenen_tutar">
+                        <input type="number" class="form-input" min="0" :step="form.para_birimi === 'USD' ? '0.01' : '100'" x-model="form.odenen_tutar">
                     </div>
                     <div>
                         <label class="form-label">Ödeme Yöntemi</label>
@@ -263,15 +297,16 @@ include __DIR__ . '/layout/header.php';
                 <div class="grid grid-cols-3 gap-3">
                     <div class="bg-slate-50 rounded-lg p-3">
                         <p class="text-xs text-slate-400">Toplam</p>
-                        <p class="font-bold text-slate-800" x-text="formatCurrency(detail?.toplam_tutar)"></p>
+                        <p class="font-bold text-slate-800" x-text="formatMoney(detail?.toplam_tutar, currencyOf(detail))"></p>
                     </div>
                     <div class="bg-emerald-50 rounded-lg p-3">
                         <p class="text-xs text-emerald-500">Ödenen</p>
-                        <p class="font-bold text-emerald-700" x-text="formatCurrency(detail?.odenen_tutar)"></p>
+                        <p class="font-bold text-emerald-700" x-text="formatMoney(detail?.odenen_tutar, currencyOf(detail))"></p>
                     </div>
                     <div class="bg-red-50 rounded-lg p-3">
                         <p class="text-xs text-red-500">Kalan</p>
-                        <p class="font-bold text-red-700" x-text="formatCurrency(Math.max(0, detail?.kalan_tutar || 0))"></p>
+                        <p class="font-bold text-red-700" x-text="formatMoney(Math.max(0, detail?.kalan_tutar || 0), currencyOf(detail))"></p>
+                        <p class="text-xs text-red-400 mt-1" x-show="currencyOf(detail) === 'USD'" x-text="formatCurrency(rowDebtTl(detail || {}))"></p>
                     </div>
                 </div>
 
@@ -281,7 +316,7 @@ include __DIR__ . '/layout/header.php';
                         <template x-for="k in (detail?.kalemler || [])" :key="k.id">
                             <div class="flex justify-between items-center bg-slate-50 rounded-lg px-3 py-2 text-sm">
                                 <span x-text="`${k.parca_adi}${k.marka ? ' ('+k.marka+')' : ''} × ${k.miktar}`"></span>
-                                <span class="font-semibold" x-text="formatCurrency(k.birim_fiyat * k.miktar)"></span>
+                                <span class="font-semibold" x-text="formatMoney(k.birim_fiyat * k.miktar, currencyOf(detail))"></span>
                             </div>
                         </template>
                     </div>
@@ -289,7 +324,7 @@ include __DIR__ . '/layout/header.php';
 
                 <div class="border border-emerald-100 bg-emerald-50 rounded-xl p-4">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <input type="number" class="form-input md:col-span-1" min="0" step="100" x-model="odemeForm.tutar" placeholder="Tutar">
+                        <input type="number" class="form-input md:col-span-1" min="0" :step="currencyOf(detail) === 'USD' ? '0.01' : '100'" x-model="odemeForm.tutar" :placeholder="currencyOf(detail) === 'USD' ? 'Tutar ($)' : 'Tutar (TL)'">
                         <select class="form-select" x-model="odemeForm.odeme_yontemi">
                             <option value="nakit">Nakit</option>
                             <option value="kart">Kart</option>
@@ -307,7 +342,7 @@ include __DIR__ . '/layout/header.php';
                         <template x-for="o in (detail?.odemeler || [])" :key="o.id">
                             <div class="flex justify-between items-center bg-white border border-slate-100 rounded-lg px-3 py-2 text-sm">
                                 <div>
-                                    <span class="font-semibold text-emerald-700" x-text="formatCurrency(o.tutar)"></span>
+                                    <span class="font-semibold text-emerald-700" x-text="formatMoney(o.tutar, currencyOf(detail))"></span>
                                     <span class="text-slate-400 ml-2" x-text="formatOdemeYontemi(o.odeme_yontemi)"></span>
                                     <span class="text-slate-400 ml-2" x-text="formatDate(o.odeme_tarihi)"></span>
                                 </div>
@@ -326,11 +361,12 @@ function todayStr() { return new Date().toISOString().slice(0,10); }
 function tedarikcilerApp() {
     return {
         alimlar: [], stoklar: [], suppliers: [], loading: false, saving: false, search: '',
+        doviz: { usd_try: 0 },
         showForm: false, showDetail: false, showSupplierForm: false, detail: null, supplierEditId: null,
-        form: { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), kalemler:[], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' },
+        form: { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), para_birimi:'TRY', usd_kur:0, kalemler:[], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' },
         supplierForm: { ad:'', yetkili:'', telefon:'', email:'', adres:'', notlar:'' },
         odemeForm: { tutar:0, odeme_yontemi:'nakit', odeme_tarihi: todayStr(), notlar:'' },
-        async init() { await Promise.all([this.loadAlimlar(), this.loadStoklar(), this.loadSuppliers()]); },
+        async init() { await Promise.all([this.loadDoviz(), this.loadAlimlar(), this.loadStoklar(), this.loadSuppliers()]); },
         get filteredSuppliers() {
             const q = this.search.trim().toLocaleLowerCase('tr-TR');
             if (!q) return this.suppliers;
@@ -341,9 +377,11 @@ function tedarikcilerApp() {
             if (!q) return this.alimlar;
             return this.alimlar.filter(a => `${a.tedarikci_adi || ''} ${a.fatura_no || ''}`.toLocaleLowerCase('tr-TR').includes(q));
         },
-        get toplamBorc() { return this.alimlar.reduce((s,a)=>s+(+a.kalan_tutar||0),0); },
-        get toplamOdenen() { return this.alimlar.reduce((s,a)=>s+(+a.odenen_tutar||0),0); },
+        get toplamBorcTl() { return this.alimlar.reduce((s,a)=>s+this.rowDebtTl(a),0); },
+        get toplamBorcUsd() { return this.alimlar.reduce((s,a)=>s+(this.currencyOf(a) === 'USD' ? (+a.kalan_tutar || 0) : 0),0); },
+        get toplamOdenenTl() { return this.alimlar.reduce((s,a)=>s+this.rowAmountTl(a, +a.odenen_tutar || 0),0); },
         get toplamAdet() { return this.alimlar.reduce((s,a)=>s+(+a.toplam_adet||0),0); },
+        async loadDoviz() { try { this.doviz = await api('api/doviz.php'); } catch(e) { this.doviz = { usd_try: 0 }; } },
         async loadAlimlar() { this.loading = true; try { this.alimlar = await api('api/tedarikciler.php'); } catch(e) {} finally { this.loading = false; } },
         async loadSuppliers() { try { this.suppliers = await api('api/tedarikciler.php?suppliers=1'); } catch(e) { this.suppliers = []; } },
         async loadStoklar() { try { this.stoklar = await api('api/stok.php'); } catch(e) {} },
@@ -375,7 +413,7 @@ function tedarikcilerApp() {
             await this.loadSuppliers();
         },
         openForm() {
-            this.form = { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), kalemler:[{ parca_id:'', miktar:1, birim_fiyat:0 }], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' };
+            this.form = { tedarikci_adi:'', fatura_no:'', alim_tarihi: todayStr(), para_birimi:'TRY', usd_kur:this.doviz.usd_try || 0, kalemler:[{ parca_id:'', miktar:1, birim_fiyat:0 }], toplam_tutar:0, odenen_tutar:0, odeme_yontemi:'nakit', notlar:'' };
             this.showForm = true;
         },
         addKalem() { this.form.kalemler.push({ parca_id:'', miktar:1, birim_fiyat:0 }); },
@@ -383,10 +421,18 @@ function tedarikcilerApp() {
             this.form.toplam_tutar = +this.form.kalemler.reduce((s,k)=>s+(parseInt(k.miktar)||1)*(parseFloat(k.birim_fiyat)||0),0).toFixed(2);
             if ((parseFloat(this.form.odenen_tutar)||0) > this.form.toplam_tutar) this.form.odenen_tutar = this.form.toplam_tutar;
         },
+        syncKur() {
+            if (this.form.para_birimi === 'USD' && !(parseFloat(this.form.usd_kur) > 0)) {
+                this.form.usd_kur = this.doviz.usd_try || 0;
+            }
+            this.calcTotal();
+        },
+        formTotalTl() { return this.rowAmountTl(this.form, +this.form.toplam_tutar || 0); },
         async saveAlim() {
             this.calcTotal();
             if (!this.form.tedarikci_adi.trim()) { showToast('Tedarikçi adı girin.', 'error'); return; }
             if (!this.form.kalemler.some(k => k.parca_id)) { showToast('En az bir stok ürünü seçin.', 'error'); return; }
+            if (this.form.para_birimi === 'USD' && !(parseFloat(this.form.usd_kur) > 0)) { showToast('USD alımı için kur girin.', 'error'); return; }
             this.saving = true;
             try {
                 await api('api/tedarikciler.php', { method:'POST', body:this.form });
@@ -427,6 +473,18 @@ function tedarikcilerApp() {
         odemeBadgeClass(d) { return d === 'odendi' ? 'badge-green' : d === 'kismi' ? 'badge-yellow' : 'badge-red'; },
         odemeBadgeText(d) { return d === 'odendi' ? 'Ödendi' : d === 'kismi' ? 'Kısmi' : 'Ödenmedi'; },
         formatOdemeYontemi(y) { return ({ nakit:'Nakit', kart:'Kart', havale:'Havale / EFT', cek:'Çek' })[y] || y || '—'; },
+        currencyOf(row) { return (row?.para_birimi || 'TRY').toUpperCase() === 'USD' ? 'USD' : 'TRY'; },
+        rowUsdRate(row) {
+            const stored = +(row?.usd_kur || 0);
+            const current = +(this.doviz.usd_try || 0);
+            return row?.id ? (current || stored) : (stored || current);
+        },
+        rowAmountTl(row, amount) { return this.currencyOf(row) === 'USD' ? amount * this.rowUsdRate(row) : amount; },
+        rowDebtTl(row) { return this.rowAmountTl(row, Math.max(0, +(row?.kalan_tutar || 0))); },
+        supplierTotalTl(s) { return (+s.toplam_alim_try || 0) + (this.doviz.usd_try ? (+s.toplam_alim_usd || 0) * (+this.doviz.usd_try || 0) : (+s.toplam_alim_usd_tl || 0)); },
+        supplierDebtTl(s) { return (+s.kalan_borc_try || 0) + (this.doviz.usd_try ? (+s.kalan_borc_usd || 0) * (+this.doviz.usd_try || 0) : (+s.kalan_borc_usd_tl || 0)); },
+        formatUsdAmount(v) { return '$' + Number(v || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+        formatMoney(v, currency) { return currency === 'USD' ? this.formatUsdAmount(v) : formatCurrency(v || 0); },
     };
 }
 </script>
