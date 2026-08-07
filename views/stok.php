@@ -73,12 +73,21 @@ include __DIR__ . '/layout/header.php';
                 <i class="fas fa-boxes-stacked text-blue-500"></i>
                 Parçalar
             </h3>
-            <span class="badge badge-blue" x-text="filteredParcalar.length + ' kayıt'"></span>
+            <div class="flex items-center gap-2">
+                <span class="badge badge-blue" x-text="filteredParcalar.length + ' kayıt'"></span>
+                <button type="button" class="btn btn-sm btn-secondary" @click="toggleOrderMode()" :class="orderMode ? 'ring-2 ring-blue-200' : ''">
+                    <i class="fas fa-sort"></i> Sıralama
+                </button>
+                <button type="button" x-show="orderMode" class="btn btn-sm btn-primary" @click="saveOrder()" :disabled="saving">
+                    <i class="fas fa-save"></i> Kaydet
+                </button>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th x-show="orderMode" class="text-center">Sıra</th>
                         <th>Parça / Cihaz Adı</th>
                         <th>Marka</th>
                         <th class="text-center">Stok</th>
@@ -93,18 +102,28 @@ include __DIR__ . '/layout/header.php';
                 </thead>
                 <tbody>
                     <template x-if="loading">
-                        <tr><td colspan="10" class="text-center py-10 text-slate-400">
+                        <tr><td :colspan="orderMode ? 11 : 10" class="text-center py-10 text-slate-400">
                             <div class="spinner mx-auto mb-2"></div>Yükleniyor...
                         </td></tr>
                     </template>
                     <template x-if="!loading && filteredParcalar.length === 0">
-                        <tr><td colspan="10" class="text-center py-10 text-slate-400">
+                        <tr><td :colspan="orderMode ? 11 : 10" class="text-center py-10 text-slate-400">
                             <i class="fas fa-boxes-stacked text-3xl mb-2 block text-slate-200"></i>
                             Parça bulunamadı
                         </td></tr>
                     </template>
                     <template x-for="p in filteredParcalar" :key="p.id">
                         <tr>
+                            <td x-show="orderMode" class="text-center">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Yukarı taşı" @click="moveItem(p.id, -1)">
+                                        <i class="fas fa-arrow-up text-xs"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-secondary btn-icon" title="Aşağı taşı" @click="moveItem(p.id, 1)">
+                                        <i class="fas fa-arrow-down text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
                             <td>
                                 <div class="flex items-center gap-2">
                                     <span class="font-medium text-slate-800" x-text="p.parca_adi"></span>
@@ -353,7 +372,7 @@ include __DIR__ . '/layout/header.php';
 function stokApp() {
     return {
         parcalar: [], loading: false, search: '', sadecekritik: false, sadececihaz: false,
-        showForm: false, showStok: false, editId: null, saving: false,
+        showForm: false, showStok: false, editId: null, saving: false, orderMode: false,
         doviz: { usd_try: 0 },
         form: { parca_adi: '', marka: '', birim_fiyat: 0, maliyet_usd: 0, stok_miktari: 0, kritik_stok_seviyesi: 5, tedarikci: '', is_cihaz: false },
         stokForm: { id: null, parca_adi: '', mevcutStok: 0, miktar: 1 },
@@ -388,6 +407,39 @@ function stokApp() {
         async loadParcalar() {
             this.loading = true;
             try { this.parcalar = await api('api/stok.php'); } catch(e) {} finally { this.loading = false; }
+        },
+
+        toggleOrderMode() {
+            this.orderMode = !this.orderMode;
+            if (this.orderMode) this.sadececihaz = false;
+        },
+
+        moveItem(id, direction) {
+            const visible = this.filteredParcalar;
+            const visibleIndex = visible.findIndex(p => p.id == id);
+            const target = visible[visibleIndex + direction];
+            if (!target) return;
+
+            const currentIndex = this.parcalar.findIndex(p => p.id == id);
+            const targetIndex = this.parcalar.findIndex(p => p.id == target.id);
+            if (currentIndex < 0 || targetIndex < 0) return;
+
+            const rows = [...this.parcalar];
+            const tmp = rows[currentIndex];
+            rows[currentIndex] = rows[targetIndex];
+            rows[targetIndex] = tmp;
+            this.parcalar = rows;
+        },
+
+        async saveOrder() {
+            this.saving = true;
+            try {
+                const ids = this.parcalar.filter(p => p.is_cihaz != 1).map(p => p.id);
+                await api('api/stok.php?sirala=1', { method: 'POST', body: { ids } });
+                showToast('Sıralama güncellendi.', 'success');
+                this.orderMode = false;
+                await this.loadParcalar();
+            } catch(e) {} finally { this.saving = false; }
         },
 
         isKritik(p) {

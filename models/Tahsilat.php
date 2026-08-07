@@ -144,7 +144,13 @@ class Tahsilat extends Model {
                    m.ad || ' ' || m.soyad AS musteri_adi, m.telefon,
                    st.toplam_tutar, st.odenen_tutar,
                    (st.toplam_tutar - st.odenen_tutar) AS kalan,
-                   st.odeme_durumu, st.satis_tarihi AS tarih, 'satis' AS alt_tip
+                   st.odeme_durumu, st.satis_tarihi AS tarih, 'satis' AS alt_tip,
+                   (SELECT COUNT(*) FROM taksitler tk
+                    WHERE tk.satis_id=st.id
+                      AND tk.firma_id=st.firma_id
+                      AND tk.deleted_at IS NULL
+                      AND tk.taksit_no>0
+                      AND tk.odendi=0) AS kalan_taksit_sayisi
             FROM satislar st JOIN musteriler m ON st.musteri_id=m.id AND m.deleted_at IS NULL
             WHERE st.firma_id=? AND st.deleted_at IS NULL AND st.odeme_durumu IN ('odenmedi','kismi') AND st.toplam_tutar>0
             ORDER BY st.satis_tarihi ASC

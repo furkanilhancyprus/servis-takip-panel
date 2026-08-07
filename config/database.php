@@ -564,6 +564,7 @@ class Database {
                 stok_miktari          INTEGER DEFAULT 0,
                 kritik_stok_seviyesi  INTEGER DEFAULT 5,
                 tedarikci             TEXT,
+                sira_no               INTEGER DEFAULT 0,
                 created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (firma_id) REFERENCES kullanicilar(id) ON DELETE CASCADE
@@ -787,6 +788,7 @@ class Database {
             ['satislar', 'seri_no',       "ALTER TABLE satislar ADD COLUMN seri_no TEXT"],
             ['parcalar',   'is_cihaz', "ALTER TABLE parcalar ADD COLUMN is_cihaz INTEGER DEFAULT 0"],
             ['parcalar',   'maliyet_usd', "ALTER TABLE parcalar ADD COLUMN maliyet_usd REAL DEFAULT 0"],
+            ['parcalar',   'sira_no', "ALTER TABLE parcalar ADD COLUMN sira_no INTEGER DEFAULT 0"],
             ['servis_parcalari', 'birim_maliyet_usd', "ALTER TABLE servis_parcalari ADD COLUMN birim_maliyet_usd REAL DEFAULT 0"],
             ['servis_parcalari', 'usd_kur', "ALTER TABLE servis_parcalari ADD COLUMN usd_kur REAL DEFAULT 0"],
             ['satis_kalemleri', 'birim_maliyet_usd', "ALTER TABLE satis_kalemleri ADD COLUMN birim_maliyet_usd REAL DEFAULT 0"],

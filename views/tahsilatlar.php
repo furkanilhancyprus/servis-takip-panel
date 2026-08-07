@@ -87,16 +87,25 @@ require_once ROOT . '/views/layout/header.php';
                         </tr>
                     </template>
                 </tbody>
+                <tfoot x-show="servisOdemeleri.length > 0">
+                    <tr class="bg-slate-50 font-semibold">
+                        <td colspan="3" class="text-right text-slate-500">Ara Toplam</td>
+                        <td x-text="fmt(servisAraToplam.toplam)"></td>
+                        <td class="text-green-600" x-text="fmt(servisAraToplam.odenen)"></td>
+                        <td class="text-red-600" x-text="fmt(servisAraToplam.kalan)"></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
         <!-- SATIS OEDEMELERi -->
         <div x-show="aktifSekme==='satis'" class="overflow-x-auto">
             <table class="data-table">
-                <thead><tr><th>Müşteri</th><th>Tarih</th><th>Toplam</th><th>Ödenen</th><th>Kalan</th><th>Durum</th><th>İşlem</th></tr></thead>
+                <thead><tr><th>Müşteri</th><th>Tarih</th><th>Toplam</th><th>Ödenen</th><th>Kalan</th><th>Kalan Taksit</th><th>Durum</th><th>İşlem</th></tr></thead>
                 <tbody>
                     <template x-if="satisOdemeleri.length === 0">
-                        <tr><td colspan="7" class="text-center py-10 text-slate-400"><i class="fas fa-check-circle text-2xl mb-2 block text-green-400"></i>Bekleyen satış ödemesi yok!</td></tr>
+                        <tr><td colspan="8" class="text-center py-10 text-slate-400"><i class="fas fa-check-circle text-2xl mb-2 block text-green-400"></i>Bekleyen satış ödemesi yok!</td></tr>
                     </template>
                     <template x-for="s in satisOdemeleri" :key="'st-'+s.id">
                         <tr class="cursor-pointer hover:bg-blue-50/50 transition-colors" @click="openSatisDetay(s)" title="Taksit detaylarını görüntüle">
@@ -105,6 +114,7 @@ require_once ROOT . '/views/layout/header.php';
                             <td class="text-sm font-medium" x-text="fmt(s.toplam_tutar)"></td>
                             <td class="text-sm text-green-600" x-text="fmt(s.odenen_tutar)"></td>
                             <td class="text-sm font-semibold text-red-600" x-text="fmt(s.kalan)"></td>
+                            <td class="text-sm font-semibold text-slate-700" x-text="s.kalan_taksit_sayisi ? `${s.kalan_taksit_sayisi} taksit` : '—'"></td>
                             <td>
                                 <span x-show="s.odeme_durumu==='odenmedi'" class="badge badge-red">Ödenmedi</span>
                                 <span x-show="s.odeme_durumu==='kismi'" class="badge badge-yellow">Kısmi</span>
@@ -113,6 +123,16 @@ require_once ROOT . '/views/layout/header.php';
                         </tr>
                     </template>
                 </tbody>
+                <tfoot x-show="satisOdemeleri.length > 0">
+                    <tr class="bg-slate-50 font-semibold">
+                        <td colspan="2" class="text-right text-slate-500">Ara Toplam</td>
+                        <td x-text="fmt(satisAraToplam.toplam)"></td>
+                        <td class="text-green-600" x-text="fmt(satisAraToplam.odenen)"></td>
+                        <td class="text-red-600" x-text="fmt(satisAraToplam.kalan)"></td>
+                        <td x-text="satisAraToplam.kalanTaksit + ' taksit'"></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -336,6 +356,19 @@ function tahsilatApp() {
         editTahsilatModal: false,
         editTahsilatForm: { id:0, tutar:0, odeme_yontemi:'nakit', tahsilat_tarihi:todayStr(), notlar:'' },
         tahsilatForm: { musteri_id:0, kaynak_tip:'', kaynak_id:0, musteri_adi:'', toplam_tutar:0, odenen_tutar:0, kalan:0, tutar:0, odeme_yontemi:'nakit', tarih:todayStr(), notlar:'' },
+
+        sumRows(rows) {
+            return rows.reduce((acc, row) => {
+                acc.toplam += parseFloat(row.toplam_tutar) || 0;
+                acc.odenen += parseFloat(row.odenen_tutar) || 0;
+                acc.kalan += parseFloat(row.kalan) || 0;
+                acc.kalanTaksit += parseInt(row.kalan_taksit_sayisi || 0, 10) || 0;
+                return acc;
+            }, { toplam:0, odenen:0, kalan:0, kalanTaksit:0 });
+        },
+
+        get servisAraToplam() { return this.sumRows(this.servisOdemeleri); },
+        get satisAraToplam() { return this.sumRows(this.satisOdemeleri); },
 
         csrfHeaders() {
             return {

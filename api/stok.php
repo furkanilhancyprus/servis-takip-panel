@@ -19,6 +19,10 @@ switch (method()) {
 
     case 'POST':
         $data = get_input();
+        if (isset($_GET['sirala'])) {
+            $p->updateOrder($data['ids'] ?? []);
+            json_ok(null, 'Sıralama güncellendi.');
+        }
         if (empty($data['parca_adi'])) json_err('Parça adı zorunludur.');
         $newId = $p->create($data);
         json_ok(['id' => $newId], 'Parça eklendi.');

@@ -219,59 +219,6 @@ include __DIR__ . '/layout/header.php';
                     </p>
                 </div>
 
-                <!-- Kalemler -->
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <label class="form-label mb-0">Ürünler / Kalemler</label>
-                        <div class="flex gap-2">
-                            <button type="button" class="btn btn-sm btn-secondary" @click="addStokKalem()">
-                                <i class="fas fa-boxes-stacked text-xs"></i> Stoktan
-                            </button>
-                            <button type="button" class="btn btn-sm btn-secondary" @click="addManuelKalem()">
-                                <i class="fas fa-plus text-xs"></i> Manuel
-                            </button>
-                        </div>
-                    </div>
-                    <div class="space-y-2">
-                        <template x-if="form.kalemler.length === 0">
-                            <div class="text-center py-4 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-lg">
-                                Kalem eklenmedi — opsiyonel
-                            </div>
-                        </template>
-                        <template x-for="(k, i) in form.kalemler" :key="i">
-                            <div class="flex flex-wrap gap-2 items-start p-3 bg-slate-50 rounded-lg">
-                                <div style="flex:1 1 18rem;min-width:15rem;">
-                                    <template x-if="k.stok_mod">
-                                        <select class="form-select" x-model="k.parca_id" @change="setStokFiyat(k)" :title="k.urun_adi || 'Stoktan ürün seçin'">
-                                            <option value="">Stoktan seçin...</option>
-                                            <template x-for="pk in stoklar" :key="pk.id">
-                                                <option :value="pk.id"
-                                                        x-text="`${pk.parca_adi}${pk.marka ? ' ('+pk.marka+')' : ''} — Stok: ${pk.stok_miktari}`">
-                                                </option>
-                                            </template>
-                                        </select>
-                                    </template>
-                                    <template x-if="!k.stok_mod">
-                                        <input type="text" class="form-input" placeholder="Ürün adı" x-model="k.urun_adi">
-                                    </template>
-                                </div>
-                                <input type="number" class="form-input w-20" placeholder="Adet" min="1"
-                                       x-model="k.miktar" @input="calcTotal()">
-                                <input type="number" class="form-input w-28" placeholder="Fiyat ₺" step="0.01"
-                                       x-model="k.birim_fiyat" @input="calcTotal()">
-                                <div class="text-right min-w-20 pt-2">
-                                    <span class="text-sm font-semibold text-slate-700"
-                                          x-text="formatCurrency((+k.miktar||1)*(+k.birim_fiyat||0))"></span>
-                                </div>
-                                <button type="button" class="btn btn-danger btn-icon btn-sm"
-                                        @click="form.kalemler.splice(i,1); calcTotal()">
-                                    <i class="fas fa-times text-xs"></i>
-                                </button>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
                 <!-- Toplam & Ödeme Türü -->
                 <div class="grid grid-cols-2 gap-4">
                     <div>
