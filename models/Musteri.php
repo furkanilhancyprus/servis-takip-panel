@@ -4,7 +4,7 @@ require_once __DIR__ . '/Cihaz.php';
 
 class Musteri extends Model {
 
-    public function getAll(string $search = ''): array {
+    public function getAll(string $search = '', string $bakimDurumu = ''): array {
         $params = [$this->firmaId];
         $where  = "WHERE m.firma_id = ? AND m.deleted_at IS NULL";
 
@@ -43,6 +43,11 @@ class Musteri extends Model {
 
         foreach ($rows as &$m) {
             $m['bakim_durumu'] = $this->calcBakimDurumu($m);
+        }
+        unset($m);
+
+        if ($bakimDurumu !== '') {
+            $rows = array_values(array_filter($rows, fn($m) => ($m['bakim_durumu'] ?? '') === $bakimDurumu));
         }
 
         return $rows;
@@ -305,6 +310,7 @@ class Musteri extends Model {
     }
 
     private function calcBakimDurumu(array $m): string {
+        if ((int)($m['bakim_aktif'] ?? 1) === 1 && empty($m['son_bakim_tarihi'])) return 'yapilmamis';
         if (empty($m['sonraki_bakim_tarihi'])) return 'ayarsiz';
         $diff = (int) round((strtotime($m['sonraki_bakim_tarihi']) - time()) / 86400);
         $hatirlatma = (int)($m['hatirlatma_gun'] ?? 7);

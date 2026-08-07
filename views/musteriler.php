@@ -33,11 +33,21 @@ include __DIR__ . '/layout/header.php';
 
     <!-- Toolbar -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div class="relative">
-            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="text" placeholder="İsim veya telefon ara..."
-                   class="form-input pl-9 w-72"
-                   x-model="search" @input.debounce.300ms="loadMusteriler()">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="text" placeholder="İsim veya telefon ara..."
+                       class="form-input pl-9 w-72"
+                       x-model="search" @input.debounce.300ms="loadMusteriler()">
+            </div>
+            <select class="form-select w-56" x-model="bakimDurumuFiltre" @change="loadMusteriler()">
+                <option value="">Tüm bakım durumları</option>
+                <option value="yapilmamis">Bakım yapılmamış</option>
+                <option value="gecikmis">Geciken bakım</option>
+                <option value="yakin">Yaklaşan bakım</option>
+                <option value="normal">Normal</option>
+                <option value="ayarsiz">Ayarsız</option>
+            </select>
         </div>
         <button class="btn btn-primary" @click="openAddModal()">
             <i class="fas fa-user-plus"></i> Yeni Müşteri
@@ -97,8 +107,9 @@ include __DIR__ . '/layout/header.php';
                                           'badge-amber': m.bakim_durumu==='yakin',
                                           'badge-green': m.bakim_durumu==='normal',
                                           'badge-blue':  m.bakim_durumu==='ayarsiz',
+                                          'badge-yellow': m.bakim_durumu==='yapilmamis',
                                       }"
-                                      x-text="{gecikmis:'Gecikmiş',yakin:'Yaklaşıyor',normal:'Normal',ayarsiz:'Ayarsız'}[m.bakim_durumu]||m.bakim_durumu">
+                                      x-text="{gecikmis:'Gecikmiş',yakin:'Yaklaşıyor',normal:'Normal',ayarsiz:'Ayarsız',yapilmamis:'Bakım Yapılmadı'}[m.bakim_durumu]||m.bakim_durumu">
                                 </span>
                             </td>
                             <td class="text-center font-semibold text-slate-700" x-text="m.toplam_servis||0"></td>
@@ -653,7 +664,7 @@ function emptyCustomerForm() {
 
 function musterilerApp() {
     return {
-        musteriler: [], cihazlar: [], standartIslemler: [], stats: {}, loading: false, search: '',
+        musteriler: [], cihazlar: [], standartIslemler: [], stats: {}, loading: false, search: '', bakimDurumuFiltre: '',
         ayarlar: { varsayilan_bakim_periyodu: 6, varsayilan_hatirlatma_gun: 7, varsayilan_periyodik_islem_id: '', musteri_kayit_bakim_servisi_oto: '0' },
         similarCustomers: [],
         showForm: false, showDetail: false, editId: null, saving: false,
@@ -675,7 +686,10 @@ function musterilerApp() {
         async loadMusteriler() {
             this.loading = true;
             try {
-                const q = this.search ? `?search=${encodeURIComponent(this.search)}` : '';
+                const p = new URLSearchParams();
+                if (this.search) p.set('search', this.search);
+                if (this.bakimDurumuFiltre) p.set('bakim_durumu', this.bakimDurumuFiltre);
+                const q = p.toString() ? `?${p}` : '';
                 this.musteriler = await api('api/musteriler.php' + q);
             } catch(e) {} finally { this.loading = false; }
         },

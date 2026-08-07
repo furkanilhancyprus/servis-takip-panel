@@ -26,7 +26,8 @@ switch (method()) {
         }
         // Liste (arama destekli)
         $search = trim($_GET['search'] ?? '');
-        json_ok($m->getAll($search));
+        $bakimDurumu = trim($_GET['bakim_durumu'] ?? '');
+        json_ok($m->getAll($search, $bakimDurumu));
 
     case 'POST':
         $data = get_input();
