@@ -178,7 +178,7 @@ require_once ROOT . '/views/layout/header.php';
         </div>
         <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <label class="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" class="mt-1 rounded" x-model="ayarlar.musteri_kayit_bakim_servisi_oto" true-value="1" false-value="0">
+                <input type="checkbox" class="mt-1 rounded" x-model="ayarlar.musteri_kayit_bakim_servisi_oto" true-value="1" false-value="0" @change="handleAutoBakimServiceToggle()">
                 <span>
                     <span class="block font-semibold text-slate-800 text-sm">Müşteri kaydında son bakım girilirse servis kaydı oluştur</span>
                     <span class="block text-xs text-slate-500 mt-1">
@@ -555,6 +555,17 @@ function ayarlarApp() {
 
         async loadIslemler() {
             try { const r=await fetch('api/standart_islemler.php'); const d=await r.json(); this.islemler=d.data??d??[]; } catch(e) {}
+        },
+        handleAutoBakimServiceToggle() {
+            if (String(this.ayarlar.musteri_kayit_bakim_servisi_oto || '0') !== '1') return;
+            if (this.ayarlar.varsayilan_periyodik_islem_id) return;
+            const fullServis = this.islemler.find(i => String(i.islem_adi || '').toLocaleLowerCase('tr-TR') === 'full servis');
+            if (fullServis) {
+                this.ayarlar.varsayilan_periyodik_islem_id = fullServis.id;
+                showToast('Periyodik bakım işlemi Full Servis olarak seçildi.', 'success');
+            } else {
+                showToast('Full Servis işlemi bulunamadı. Önce standart işlemlere ekleyin veya listeden bir işlem seçin.', 'warning');
+            }
         },
         openIslemModal() {
             this.islemEditId=null;

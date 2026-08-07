@@ -579,6 +579,7 @@ function servislerApp() {
         },
         varsayilanPeriyot: 6,
         varsayilanPeriyodikIslemId: '',
+        otomatikBakimServisiAktif: false,
         tahsilatForm: {
             musteri_id: '', kaynak_id: '', kaynak_tip: 'servis',
             musteriAdi: '', kalan: 0, tutar: 0,
@@ -625,6 +626,7 @@ function servislerApp() {
                 // getAll() { anahtar: deger } map döndürür
                 this.varsayilanPeriyot = parseInt(ayarlar['varsayilan_bakim_periyodu']) || 6;
                 this.varsayilanPeriyodikIslemId = ayarlar['varsayilan_periyodik_islem_id'] || '';
+                this.otomatikBakimServisiAktif = String(ayarlar['musteri_kayit_bakim_servisi_oto'] || '0') === '1';
                 this.form.periyot_ay  = this.varsayilanPeriyot;
             } catch(e) {}
         },
@@ -730,6 +732,7 @@ function servislerApp() {
         },
 
         applyVarsayilanPeriyodikIslem() {
+            if (!this.otomatikBakimServisiAktif) return;
             if (!this.varsayilanPeriyodikIslemId) return;
             const found = this.standartIslemler.find(si => String(si.id) === String(this.varsayilanPeriyodikIslemId));
             if (!found) return;
