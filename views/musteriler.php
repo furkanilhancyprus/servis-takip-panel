@@ -653,7 +653,8 @@ function emptyCustomerForm() {
 
 function musterilerApp() {
     return {
-        musteriler: [], cihazlar: [], stats: {}, loading: false, search: '',
+        musteriler: [], cihazlar: [], standartIslemler: [], stats: {}, loading: false, search: '',
+        ayarlar: { varsayilan_bakim_periyodu: 6, varsayilan_hatirlatma_gun: 7, varsayilan_periyodik_islem_id: '', musteri_kayit_bakim_servisi_oto: '0' },
         similarCustomers: [],
         showForm: false, showDetail: false, editId: null, saving: false,
         detail: null, showDetailMap: false, showBakimEdit: false,
@@ -666,7 +667,7 @@ function musterilerApp() {
         form: emptyCustomerForm(),
 
         async init() {
-            await Promise.all([this.loadMusteriler(), this.loadStats(), this.loadCihazlar()]);
+            await Promise.all([this.loadMusteriler(), this.loadStats(), this.loadCihazlar(), this.loadBakimAyarlar()]);
             this.$watch('showForm', val => { if (!val) this._destroyFormMap(); });
             this.$watch('showDetail', val => { if (!val) { this._destroyDetailMap(); this.showDetailMap = false; } });
         },
@@ -685,6 +686,17 @@ function musterilerApp() {
 
         async loadCihazlar() {
             try { this.cihazlar = await api('api/cihazlar.php'); } catch(e) { this.cihazlar = []; }
+        },
+
+        async loadBakimAyarlar() {
+            try {
+                const [ayarlar, islemler] = await Promise.all([
+                    api('api/ayarlar.php'),
+                    api('api/standart_islemler.php'),
+                ]);
+                this.ayarlar = { ...this.ayarlar, ...(ayarlar || {}) };
+                this.standartIslemler = islemler || [];
+            } catch(e) {}
         },
 
         selectedExistingDevice() {
@@ -736,7 +748,14 @@ function musterilerApp() {
             this.mapSearch = '';
             this.similarCustomers = [];
             this.form = emptyCustomerForm();
-            this.bakimForm = { aktif: true, periyot_ay: 6, son_bakim_tarihi: '', sonraki_bakim_tarihi: '', hatirlatma_gun: 7, notlar: '' };
+            this.bakimForm = {
+                aktif: true,
+                periyot_ay: parseInt(this.ayarlar.varsayilan_bakim_periyodu) || 6,
+                son_bakim_tarihi: '',
+                sonraki_bakim_tarihi: '',
+                hatirlatma_gun: parseInt(this.ayarlar.varsayilan_hatirlatma_gun) || 7,
+                notlar: '',
+            };
             this.showForm = true;
         },
 
@@ -1004,22 +1023,69 @@ function musterilerApp() {
             }
             this.saving = true;
             try {
+                let musteriId = this.editId;
                 if (this.editId) {
                     await api(`api/musteriler.php?id=${this.editId}`, { method: 'PUT', body: this.form });
                     showToast('Müşteri güncellendi.', 'success');
                 } else {
-                    await api('api/musteriler.php', { method: 'POST', body: this.form });
+                    const created = await api('api/musteriler.php', { method: 'POST', body: this.form });
+                    musteriId = created?.id;
                     showToast('Müşteri eklendi.', 'success');
                 }
-                if (this.editId) {
+                if (musteriId) {
                     if (this.bakimForm.son_bakim_tarihi && !this.bakimForm.sonraki_bakim_tarihi) {
                         this.setSonrakiBakimFromSonBakim();
                     }
-                    await api(`api/bakimlar.php?musteri_id=${this.editId}`, { method: 'PUT', body: this.bakimForm });
+                    await api(`api/bakimlar.php?musteri_id=${musteriId}`, { method: 'PUT', body: this.bakimForm });
+                    if (!this.editId) {
+                        await this.createInitialMaintenanceServiceIfNeeded(musteriId);
+                    }
                 }
                 this.showForm = false;
-                await this.loadMusteriler();
+                await Promise.all([this.loadMusteriler(), this.loadStats()]);
             } catch(e) {} finally { this.saving = false; }
+        },
+
+        shouldCreateInitialMaintenanceService() {
+            if (String(this.ayarlar.musteri_kayit_bakim_servisi_oto || '0') !== '1') return false;
+            if (!this.bakimForm.aktif || !this.bakimForm.son_bakim_tarihi) return false;
+            if (!this.ayarlar.varsayilan_periyodik_islem_id) return false;
+            return String(this.bakimForm.son_bakim_tarihi).slice(0, 10) <= new Date().toISOString().slice(0, 10);
+        },
+
+        buildInitialMaintenanceServicePayload(musteriId) {
+            const islem = this.standartIslemler.find(i => String(i.id) === String(this.ayarlar.varsayilan_periyodik_islem_id));
+            if (!islem) return null;
+            return {
+                musteri_id: musteriId,
+                servis_tipi: 'periyodik_bakim',
+                servis_tarihi: this.bakimForm.son_bakim_tarihi,
+                periyot_ay: parseInt(this.bakimForm.periyot_ay) || parseInt(this.ayarlar.varsayilan_bakim_periyodu) || 6,
+                islemler: [{ islem: islem.islem_adi, tutar: parseFloat(islem.varsayilan_fiyat) || 0 }],
+                parcalar: (islem.parcalar || []).map(p => ({
+                    parca_id: p.parca_id,
+                    miktar: parseInt(p.miktar) || 1,
+                    birim_fiyat: parseFloat(p.birim_fiyat) || 0,
+                    dahil: true,
+                })),
+                toplam_tutar: parseFloat(islem.varsayilan_fiyat) || 0,
+                notlar: 'Müşteri kaydı sırasında son bakım tarihinden otomatik oluşturuldu.',
+            };
+        },
+
+        async createInitialMaintenanceServiceIfNeeded(musteriId) {
+            if (!this.shouldCreateInitialMaintenanceService()) return;
+            const payload = this.buildInitialMaintenanceServicePayload(musteriId);
+            if (!payload) {
+                showToast('Otomatik servis için seçili bakım işlemi bulunamadı.', 'warning');
+                return;
+            }
+            try {
+                await api('api/servisler.php', { method: 'POST', body: payload });
+                showToast('Son bakım için otomatik servis kaydı oluşturuldu.', 'success');
+            } catch(e) {
+                showToast('Müşteri kaydedildi; otomatik servis oluşturulamadı.', 'warning');
+            }
         },
 
         async deleteMusteri(m) {

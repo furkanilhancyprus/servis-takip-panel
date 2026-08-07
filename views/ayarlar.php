@@ -176,7 +176,19 @@ require_once ROOT . '/views/layout/header.php';
                 </select>
             </div>
         </div>
-        <p class="text-xs text-slate-400 mt-2">Bu ayarlar yeni eklenen müşterilere otomatik uygulanır.</p>
+        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" class="mt-1 rounded" x-model="ayarlar.musteri_kayit_bakim_servisi_oto" true-value="1" false-value="0">
+                <span>
+                    <span class="block font-semibold text-slate-800 text-sm">Müşteri kaydında son bakım girilirse servis kaydı oluştur</span>
+                    <span class="block text-xs text-slate-500 mt-1">
+                        Yeni müşteri eklerken "Bugün bakım yapıldı" veya geçmiş bir son bakım tarihi seçilirse,
+                        yukarıdaki periyodik bakım işlemiyle otomatik tamamlanmış servis oluşturulur.
+                    </span>
+                </span>
+            </label>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">Bu ayarlar yeni eklenen müşterilere otomatik uygulanır. Otomatik servis oluşturma varsayılan olarak kapalıdır.</p>
     </div>
 
     <!-- Kaydet -->
@@ -383,7 +395,7 @@ require_once ROOT . '/views/layout/header.php';
 function ayarlarApp() {
     return {
         ayarlar: { firma_adi:'', firma_telefon:'', firma_adres:'', firma_email:'', para_birimi:'₺',
-                   varsayilan_bakim_periyodu:6, varsayilan_hatirlatma_gun:7, varsayilan_periyodik_islem_id:'',
+                   varsayilan_bakim_periyodu:6, varsayilan_hatirlatma_gun:7, varsayilan_periyodik_islem_id:'', musteri_kayit_bakim_servisi_oto:'0',
                    firma_vergi_no:'', firma_iban:'', fatura_notu:'', fatura_logo:'' },
         islemler: [], cihazlar: [], stoklar: [], saving: false,
         accountSaving: false,
@@ -507,6 +519,10 @@ function ayarlarApp() {
             } catch(e) {}
         },
         async saveAyarlar() {
+            if (String(this.ayarlar.musteri_kayit_bakim_servisi_oto || '0') === '1' && !this.ayarlar.varsayilan_periyodik_islem_id) {
+                showToast('Otomatik servis için önce Periyodik Bakım İşlemi seçin.', 'error');
+                return;
+            }
             this.saving=true;
             try {
                 const r=await fetch('api/ayarlar.php',{method:'POST',headers:this.csrfHeaders(),body:JSON.stringify(this.ayarlar)});

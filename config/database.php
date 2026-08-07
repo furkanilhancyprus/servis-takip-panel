@@ -1103,6 +1103,7 @@ class Database {
         $defaults = [
             ['varsayilan_bakim_periyodu', '6'],
             ['varsayilan_hatirlatma_gun', '7'],
+            ['musteri_kayit_bakim_servisi_oto', '0'],
             ['firma_adi',      'Servis Takip Panel'],
             ['firma_telefon',  ''],
             ['firma_adres',    ''],
