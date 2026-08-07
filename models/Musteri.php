@@ -10,15 +10,19 @@ class Musteri extends Model {
 
         $rows = $this->db->fetchAll("
             SELECT m.*,
-                   COUNT(DISTINCT s.id) as toplam_servis,
-                   MAX(s.tamamlanma_tarihi) as son_servis_tarihi,
+                   COALESCE(so.toplam_servis, 0) as toplam_servis,
+                   so.son_servis_tarihi,
                    pb.periyot_ay, pb.aktif as bakim_aktif,
                    pb.son_bakim_tarihi, pb.sonraki_bakim_tarihi, pb.hatirlatma_gun
             FROM musteriler m
-            LEFT JOIN servisler s  ON m.id = s.musteri_id AND s.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT musteri_id, firma_id, COUNT(*) as toplam_servis, MAX(tamamlanma_tarihi) as son_servis_tarihi
+                FROM servisler
+                WHERE deleted_at IS NULL
+                GROUP BY musteri_id, firma_id
+            ) so ON so.musteri_id = m.id AND so.firma_id = m.firma_id
             LEFT JOIN periyodik_bakimlar pb ON m.id = pb.musteri_id AND pb.deleted_at IS NULL
             $where
-            GROUP BY m.id
             ORDER BY LOWER(m.ad) ASC, LOWER(m.soyad) ASC, m.created_at DESC
         ", $params);
 
