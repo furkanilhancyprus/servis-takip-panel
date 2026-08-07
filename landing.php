@@ -528,7 +528,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
             <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">
                 Şeffaf ve uygun fiyatlar
             </h2>
-            <p class="text-slate-500 text-lg">Bulut aboneliği ya da tamamen lokal kullanım. İhtiyacınıza göre seçin.</p>
+            <p class="text-slate-500 text-lg">Web paneli ve Windows masaüstü uygulamasıyla sade abonelik.</p>
         </div>
 
         <div class="grid lg:grid-cols-3 gap-6">
@@ -542,7 +542,7 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Web paneliyle deneme kullanımı</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Temel müşteri ve servis takibi</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Sistemi risksiz keşfetme</li>
-                    <li class="flex items-center gap-2 text-sm text-slate-400"><i class="fas fa-times text-slate-300 w-4"></i>Gelişmiş senkron ve ekip özellikleri hariç</li>
+                    <li class="flex items-center gap-2 text-sm text-slate-400"><i class="fas fa-times text-slate-300 w-4"></i>Gelişmiş raporlama ve ekip özellikleri hariç</li>
                 </ul>
                 <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=ucretsiz')) ?>" class="block text-center py-2.5 border-2 border-slate-200 hover:border-blue-400 text-slate-700 font-semibold rounded-xl transition text-sm">
                     <?= htmlspecialchars(stp_app_label('Ücretsiz Başla')) ?>
@@ -560,8 +560,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 <ul class="space-y-3 mb-8">
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Web paneli</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Masaüstü uygulaması</li>
-                    <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Mobil uygulama</li>
-                    <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Offline kullanım ve otomatik senkron</li>
+                    <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Windows masaüstü uygulaması</li>
+                    <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Tek hesapla web ve masaüstü erişim</li>
                     <li class="flex items-center gap-2 text-sm text-slate-600"><i class="fas fa-check text-green-500 w-4"></i>Raporlar, stok ve tahsilat takibi</li>
                 </ul>
                 <a href="<?= htmlspecialchars(stp_app_href('kayit.php?paket=standart')) ?>" class="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition text-sm shadow-lg shadow-blue-200">
@@ -588,22 +588,9 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
 
         </div>
 
-        <div class="mt-6 border border-slate-200 rounded-2xl p-6 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-                <div class="text-sm font-bold text-slate-900 mb-1">Lokal Lifetime</div>
-                <p class="text-sm text-slate-600">
-                    Sadece Windows masaüstünde, internetsiz ve limitsiz çalışacak lokal kullanım isteyen firmalar için ayrıca teklif hazırlanır.
-                </p>
-            </div>
-            <a href="#supportChat" data-chat-message="Lokal Lifetime paket için teklif almak istiyorum."
-               class="inline-flex justify-center items-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-sm transition">
-                <i class="fas fa-envelope"></i> Lokal Paket İçin İletişime Geçin
-            </a>
-        </div>
-
         <div class="mt-8 bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
             <p class="text-sm text-slate-600">
-                Aylık abonelikle web, masaüstü ve mobil senkron kullanabilirsiniz. Tamamen lokal masaüstü kullanım için ayrıca bizimle iletişime geçebilirsiniz.
+                Aylık abonelikle web panelini ve Windows masaüstü uygulamasını birlikte kullanabilirsiniz.
             </p>
         </div>
     </div>
@@ -623,9 +610,8 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 ['Teknik bilgi gerekiyor mu?', 'Hayır. Servis Takip Panel, teknik bilgi gerektirmeden kullanılabilecek şekilde tasarlanmıştır. İnternet bağlantısı olan her cihazdan erişebilirsiniz.'],
                 ['Verilerim güvende mi?', 'Tüm verileriniz şifrelenmiş sunucularda saklanır. Başka firmaların verilerine asla erişilemez. Her firma tamamen izole bir ortamda çalışır.'],
                 ['Mevcut müşteri listem varsa ne yapabilirim?', 'Müşterilerinizi tek tek ekleyebilirsiniz. İlerleyen sürümlerde Excel ile toplu içe aktarma özelliği de eklenecektir.'],
-                ['İnternet olmadan çalışıyor mu?', 'Evet. SaaS paketinde masaüstü uygulaması internetsiz çalışır ve bağlantı geldiğinde web hesabınızla senkronize olur. Lokal lifetime pakette ise sistem tamamen bilgisayarınızda çalışır; web, mobil ve bulut senkron kullanılmaz.'],
-                ['Lokal lifetime paket nedir?', 'Tek seferlik ödeme ile yalnızca Windows masaüstü uygulamasını kullanırsınız. Veriler bilgisayarınızda kalır, aylık ödeme yoktur; web paneli, mobil uygulama ve bulut senkronizasyon dahil değildir.'],
-                ['Mobil uygulama var mı?', 'Evet. Android uygulaması native olarak hazırlanmıştır; offline kayıt alabilir ve internet bağlantısı geldiğinde web hesabıyla senkronize olur.'],
+                ['Masaüstü uygulaması ne işe yarar?', 'Windows masaüstü uygulaması web paneldeki aynı sistemi ayrı bir uygulama penceresinde açar. Tüm müşteri, servis, satış, tahsilat ve rapor özellikleri aynı şekilde çalışır.'],
+                ['İnternet gerekiyor mu?', 'Evet. Mevcut masaüstü uygulaması web panel ile çalışır ve internet bağlantısı gerektirir.'],
             ];
             foreach ($faqs as $i => [$q, $a]): ?>
             <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
@@ -651,29 +637,31 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
 <section id="indir" class="py-24 px-4 bg-slate-50">
     <div class="max-w-5xl mx-auto">
         <div class="text-center mb-14">
-            <span class="inline-block bg-blue-100 text-blue-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-4">📱 Uygulama İndir</span>
-            <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Her Cihazda Yanınızda</h2>
-            <p class="text-slate-500 text-lg max-w-xl mx-auto">Web, masaüstü ve mobil — istediğiniz cihazdan kullanın.</p>
+            <span class="inline-block bg-blue-100 text-blue-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-4">Uygulama İndir</span>
+            <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Windows Masaüstü Uygulaması</h2>
+            <p class="text-slate-500 text-lg max-w-xl mx-auto">Web paneldeki tüm özellikleri masaüstünden kullanın.</p>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-8">
+        <div class="max-w-2xl mx-auto">
 
             <!-- Windows Masaüstü -->
             <div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition">
                 <div class="flex items-start gap-5">
-                    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl">🖥️</div>
+                    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl text-blue-600">
+                        <i class="fas fa-desktop"></i>
+                    </div>
                     <div class="flex-1">
                         <h3 class="text-xl font-bold text-slate-900 mb-1">Windows Masaüstü</h3>
-                        <p class="text-slate-500 text-sm mb-1">İnternet gerektirmez. Tek seferlik kurulum.</p>
+                        <p class="text-slate-500 text-sm mb-1">Web panel ile aynı özellikler. Tek seferlik kurulum.</p>
                         <div class="flex items-center gap-2 text-xs text-slate-400 mb-5">
                             <span>Windows 10/11</span>
                             <span>•</span>
                             <span>64-bit</span>
                             <span>•</span>
-                            <span>~85 MB</span>
+                            <span>İnternet gerekli</span>
                         </div>
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-xs text-amber-700">
-                            <strong>Web hesabınızla giriş yapın</strong> — İnternetsiz çalışır, bağlantı gelince otomatik senkronize olur.
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5 text-xs text-blue-700">
+                            <strong>Web hesabınızla giriş yapın</strong> — müşteri, servis, satış, tahsilat, stok ve raporlar masaüstünde aynı şekilde çalışır.
                         </div>
                         <?php stp_download_button(
                             'downloads/ServisTakipPanel-Kurulum.exe',
@@ -686,68 +674,12 @@ function stp_download_button(string $relativePath, string $label, string $iconCl
                 </div>
             </div>
 
-            <!-- Lokal Lifetime -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition">
-                <div class="flex items-start gap-5">
-                    <div class="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl">🔒</div>
-                    <div class="flex-1">
-                        <h3 class="text-xl font-bold text-slate-900 mb-1">Lokal Lifetime</h3>
-                        <p class="text-slate-500 text-sm mb-1">Bulutsuz, sadece bu bilgisayarda çalışan sürüm.</p>
-                        <div class="flex items-center gap-2 text-xs text-slate-400 mb-5">
-                            <span>Windows 10/11</span>
-                            <span>•</span>
-                            <span>Senkron yok</span>
-                            <span>•</span>
-                            <span>Tek seferlik teklif</span>
-                        </div>
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-xs text-amber-700">
-                            Web panel, mobil uygulama ve bulut senkron dahil değildir. Teklif ve kurulum bilgisi için iletişime geçin.
-                        </div>
-                        <?php stp_download_button(
-                            'downloads/ServisTakipPanel-Lokal-Lifetime-Kurulum.exe',
-                            'Lokal Kurulum Dosyası',
-                            'fas fa-download',
-                            'inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm',
-                            'Lokal Lifetime kurulum dosyasını indirmek istiyorum.'
-                        ); ?>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Android Mobil -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition">
-                <div class="flex items-start gap-5">
-                    <div class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl">📱</div>
-                    <div class="flex-1">
-                        <h3 class="text-xl font-bold text-slate-900 mb-1">Android Uygulaması</h3>
-                        <p class="text-slate-500 text-sm mb-1">Mobilde takip, bildirim ve hızlı erişim.</p>
-                        <div class="flex items-center gap-2 text-xs text-slate-400 mb-5">
-                            <span>Android 7.0+</span>
-                            <span>•</span>
-                            <span>Native uygulama</span>
-                            <span>•</span>
-                            <span>~5 MB</span>
-                        </div>
-                        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-5 text-xs text-emerald-700">
-                            Native Android uygulaması offline kayıt tutar; internet bağlantısı geldiğinde web panelle senkronize olur.
-                        </div>
-                        <?php stp_download_button(
-                            'downloads/ServisTakipPanel.apk',
-                            'APK İndir',
-                            'fab fa-android',
-                            'inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl transition shadow text-sm',
-                            'Android APK dosyasını indirmek istiyorum.'
-                        ); ?>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
         <!-- Bilgi Al -->
         <div class="mt-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 text-white text-center">
             <h3 class="text-xl font-bold mb-2">Masaüstü Uygulamasını Kullanmak İstiyor musunuz?</h3>
-            <p class="text-blue-100 text-sm mb-5">Web hesabınızla giriş yapın; masaüstünde offline çalışın, internete bağlanınca verileriniz senkronize olsun.</p>
+            <p class="text-blue-100 text-sm mb-5">Web hesabınızla giriş yapın; aynı paneli Windows uygulaması olarak kullanın.</p>
             <a href="#supportChat" data-chat-message="Masaüstü uygulaması hakkında bilgi almak istiyorum."
                class="inline-flex items-center gap-2 bg-white text-blue-700 font-bold px-7 py-3 rounded-xl transition hover:bg-blue-50 text-sm">
                 <i class="fas fa-envelope"></i> Bilgi Al

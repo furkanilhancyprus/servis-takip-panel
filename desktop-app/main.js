@@ -1,100 +1,14 @@
 const { app, BrowserWindow, shell, dialog, Menu, session } = require('electron');
-const { spawn, execSync } = require('child_process');
 const path = require('path');
-const fs = require('fs');
-const http = require('http');
+const https = require('https');
+
+const APP_URL = process.env.STP_APP_URL || 'https://servistakippanel.com/';
+const APP_ORIGIN = new URL(APP_URL).origin;
 
 let mainWindow;
-let phpProcess;
-let phpPort = 8734;
 
-function lokalOnlyMod() {
-    return process.env.STP_LOCAL_ONLY === '1' || app.getName().toLowerCase().includes('lokal');
-}
-
-function resourcePath(...parts) {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, ...parts);
-    }
-    return path.join(__dirname, 'resources', ...parts);
-}
-
-function wwwPath() {
-    return resourcePath('www');
-}
-
-function phpExePath() {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, 'php', 'php.exe');
-    }
-
-    const localPhp = path.join(__dirname, 'resources', 'php', 'php.exe');
-    if (fs.existsSync(localPhp)) return localPhp;
-
-    try {
-        return execSync('where php').toString().trim().split('\n')[0].trim();
-    } catch {
-        return 'php';
-    }
-}
-
-function bosPortBul(baslangic = 8734) {
-    return new Promise((resolve, reject) => {
-        const server = http.createServer();
-        server.listen(baslangic, '127.0.0.1', () => {
-            const { port } = server.address();
-            server.close(() => resolve(port));
-        });
-        server.on('error', () => bosPortBul(baslangic + 1).then(resolve).catch(reject));
-    });
-}
-
-async function phpBaslat() {
-    phpPort = await bosPortBul(8734);
-    const www = wwwPath();
-    const phpExe = phpExePath();
-
-    phpProcess = spawn(phpExe, [
-        '-S', `127.0.0.1:${phpPort}`,
-        '-t', www,
-        '-c', resourcePath('php', 'php.ini'),
-    ], {
-        env: {
-            ...process.env,
-            STP_DATA_DIR: app.getPath('userData'),
-            STP_LOCAL_ONLY: lokalOnlyMod() ? '1' : '0',
-        },
-        windowsHide: true,
-    });
-
-    phpProcess.stderr.on('data', d => {
-        const msg = d.toString().trim();
-        if (msg && !msg.includes('started') && !msg.includes('Listening')) {
-            console.log('[PHP]', msg);
-        }
-    });
-
-    phpProcess.on('close', code => {
-        if (code !== 0 && mainWindow) {
-            console.error('PHP sunucusu kapandi, kod:', code);
-        }
-    });
-
-    await new Promise((resolve, reject) => {
-        let deneme = 0;
-        const kontrol = setInterval(() => {
-            http.get(`http://127.0.0.1:${phpPort}/`, res => {
-                clearInterval(kontrol);
-                res.resume();
-                resolve();
-            }).on('error', () => {
-                if (++deneme > 30) {
-                    clearInterval(kontrol);
-                    reject(new Error('PHP baslatilamadi'));
-                }
-            });
-        }, 300);
-    });
+function iconPath() {
+    return path.join(__dirname, 'build', 'icon.ico');
 }
 
 function splashAc() {
@@ -105,11 +19,25 @@ function splashAc() {
         transparent: true,
         alwaysOnTop: true,
         resizable: false,
-        webPreferences: { nodeIntegration: false },
-        icon: path.join(__dirname, 'build', 'icon.ico'),
+        webPreferences: { nodeIntegration: false, contextIsolation: true },
+        icon: iconPath(),
     });
     splash.loadFile(path.join(__dirname, 'splash.html'));
     return splash;
+}
+
+function internetVarMi() {
+    return new Promise(resolve => {
+        const req = https.get(APP_URL, { timeout: 7000 }, res => {
+            res.resume();
+            resolve(true);
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+        req.on('error', () => resolve(false));
+    });
 }
 
 function anaEkranAc() {
@@ -120,39 +48,48 @@ function anaEkranAc() {
         minHeight: 700,
         show: false,
         autoHideMenuBar: true,
-        icon: path.join(__dirname, 'build', 'icon.ico'),
+        icon: iconPath(),
+        backgroundColor: '#f1f5f9',
+        title: 'Servis Takip Panel',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
             webSecurity: true,
         },
-        backgroundColor: '#f1f5f9',
-        title: lokalOnlyMod() ? 'Servis Takip Panel Lokal' : 'Servis Takip Panel',
     });
 
     Menu.setApplicationMenu(null);
     mainWindow.on('closed', () => { mainWindow = null; });
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        shell.openExternal(url);
+        if (url.startsWith(APP_ORIGIN)) {
+            mainWindow.loadURL(url);
+        } else {
+            shell.openExternal(url);
+        }
         return { action: 'deny' };
+    });
+
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (!url.startsWith(APP_ORIGIN)) {
+            event.preventDefault();
+            shell.openExternal(url);
+        }
     });
 
     return mainWindow;
 }
 
-function konumIzniAyarla() {
+function izinleriAyarla() {
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
         const url = webContents.getURL();
-        const yerelUygulama = url.startsWith(`http://127.0.0.1:${phpPort}/`);
-        callback(permission === 'geolocation' && yerelUygulama);
+        callback(permission === 'geolocation' && url.startsWith(APP_ORIGIN));
     });
 
     session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
         const url = webContents?.getURL?.() || '';
-        const yerelUygulama = url.startsWith(`http://127.0.0.1:${phpPort}/`);
-        return permission === 'geolocation' && yerelUygulama;
+        return permission === 'geolocation' && url.startsWith(APP_ORIGIN);
     });
 }
 
@@ -160,31 +97,32 @@ app.whenReady().then(async () => {
     const splash = splashAc();
 
     try {
-        await phpBaslat();
-        konumIzniAyarla();
-        splash.close();
+        izinleriAyarla();
+        const online = await internetVarMi();
+        if (!online) {
+            splash.close();
+            dialog.showErrorBox(
+                'Internet Baglantisi Gerekli',
+                'Servis Takip Panel masaustu uygulamasi web panel ile calisir. Lutfen internet baglantinizi kontrol edip tekrar acin.'
+            );
+            app.quit();
+            return;
+        }
 
         const win = anaEkranAc();
-        win.loadURL(`http://127.0.0.1:${phpPort}/`);
+        await win.loadURL(APP_URL);
+        splash.close();
         win.once('ready-to-show', () => {
             win.maximize();
             win.show();
         });
     } catch (err) {
         splash.close();
-        dialog.showErrorBox('Baslatma Hatasi', err.message);
+        dialog.showErrorBox('Baslatma Hatasi', err.message || 'Uygulama baslatilamadi.');
         app.quit();
     }
 });
 
 app.on('window-all-closed', () => {
-    if (phpProcess) phpProcess.kill();
     if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('before-quit', () => {
-    if (phpProcess) {
-        phpProcess.kill();
-        phpProcess = null;
-    }
 });

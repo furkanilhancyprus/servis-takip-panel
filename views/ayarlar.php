@@ -6,18 +6,7 @@ require_once ROOT . '/views/layout/header.php';
 
 <div x-data="ayarlarApp()" x-init="init()" x-cloak class="max-w-4xl space-y-6">
 
-    <?php if (getenv('STP_DATA_DIR') && getenv('STP_LOCAL_ONLY') === '1'): ?>
-    <div class="card p-6 border-emerald-200 bg-emerald-50">
-        <h3 class="font-semibold text-emerald-900 mb-2 flex items-center gap-2">
-            <i class="fas fa-computer text-emerald-600"></i> Lokal Lifetime Modu
-        </h3>
-        <p class="text-sm text-emerald-800">
-            Bu sürüm tamamen bu bilgisayarda çalışır. Web panel, mobil uygulama ve bulut senkronizasyon kullanılmaz; veriler yerel veritabanında saklanır.
-        </p>
-    </div>
-    <?php endif; ?>
-
-    <?php if (getenv('STP_DATA_DIR') && getenv('STP_LOCAL_ONLY') !== '1'): ?>
+    <?php if (getenv('STP_DATA_DIR')): ?>
     <!-- Senkronizasyon -->
     <div class="card p-6">
         <h3 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -61,10 +50,10 @@ require_once ROOT . '/views/layout/header.php';
     <!-- Veri Tasima -->
     <div class="card p-6">
         <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-            <i class="fas fa-box-archive text-amber-500"></i> Veri Taşıma / Lokal Lifetime Geçişi
+            <i class="fas fa-box-archive text-amber-500"></i> Yedekleme / Veri Taşıma
         </h3>
         <p class="text-sm text-slate-500 mb-4">
-            Web hesabındaki tüm firma verisini dışa aktarabilir, Lokal Lifetime masaüstü uygulamasında aynı dosyayı içe aktarabilirsiniz.
+            Firma verilerinizi dışa aktarabilir veya daha önce aldığınız yedeği içe aktarabilirsiniz.
         </p>
         <div class="flex flex-wrap items-center gap-2">
             <a href="api/backup.php?action=export" class="btn btn-secondary">
@@ -76,7 +65,7 @@ require_once ROOT . '/views/layout/header.php';
             </label>
         </div>
         <p class="text-xs text-slate-400 mt-3">
-            İçe aktarma mevcut hesabın içine verileri eşleştirerek ekler/günceller. Büyük geçişlerden önce mevcut lokal verinizi ayrıca dışa aktarın.
+            İçe aktarma mevcut hesabın içine verileri eşleştirerek ekler/günceller. Büyük işlemlerden önce güncel yedek almanız önerilir.
         </p>
     </div>
 

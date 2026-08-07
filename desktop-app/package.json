@@ -12,7 +12,6 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win --x64",
-    "dist:local": "electron-builder --win --x64 -c.productName=\"Servis Takip Panel Lokal\" -c.win.artifactName=\"ServisTakipPanel-Lokal-Lifetime-${version}-Kurulum.${ext}\" -c.extraMetadata.name=\"servis-takip-panel-lokal\"",
     "dist:portable": "electron-builder --win portable --x64"
   },
   "dependencies": {},
@@ -34,20 +33,6 @@
       "splash.html",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "resources/php",
-        "to": "php",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "resources/www",
-        "to": "www",
-        "filter": ["**/*"]
-      }
-    ],
     "win": {
       "target": [
         {
@@ -59,7 +44,7 @@
       ],
       "icon": "build/icon.ico",
       "artifactName": "ServisTakipPanel-${version}-Kurulum.${ext}",
-      "requestedExecutionLevel": "requireAdministrator"
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
@@ -70,8 +55,7 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "license": "build/lisans.txt",
-      "deleteAppDataOnUninstall": false,
-      "include": "build/installer.nsh"
+      "deleteAppDataOnUninstall": false
     }
   }
 }

@@ -549,15 +549,9 @@
                 <span class="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full">
                     <i class="fas fa-computer text-xs"></i> Masaüstü
                 </span>
-                <?php if (getenv('STP_LOCAL_ONLY') === '1'): ?>
-                <span class="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-full hidden sm:inline-flex">
-                    <i class="fas fa-lock text-xs"></i> Lokal Lifetime
-                </span>
-                <?php else: ?>
                 <span class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full hidden sm:inline-flex">
-                    <i class="fas fa-wifi text-xs"></i> Otomatik Senkron
+                    <i class="fas fa-wifi text-xs"></i> Web Panel
                 </span>
-                <?php endif; ?>
                 <?php else: ?>
                 <span class="text-xs text-slate-400 hidden sm:inline">
                     <i class="fas fa-circle text-green-400 text-xs mr-1"></i>Sistem Aktif
