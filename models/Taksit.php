@@ -221,7 +221,7 @@ class Taksit extends Model {
 
         $toplam = (float)($satis['toplam_tutar'] ?? 0);
         $storedPaid = (float)($satis['odenen_tutar'] ?? 0);
-        if ($toplam <= 0 || $storedPaid <= 0 || $storedPaid >= $toplam) {
+        if ($toplam <= 0) {
             return;
         }
 
@@ -234,7 +234,7 @@ class Taksit extends Model {
         );
 
         $legacyRows = $this->db->fetchAll(
-            "SELECT id, tutar
+            "SELECT id, tutar, tahsilat_tarihi
              FROM tahsilatlar
              WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? AND deleted_at IS NULL
                AND COALESCE(notlar,'') = 'Eski taksit odemesi'
@@ -245,9 +245,32 @@ class Taksit extends Model {
             return;
         }
 
+        $seen = [];
+        $dedupedRows = [];
+        foreach ($legacyRows as $row) {
+            $key = ($row['tahsilat_tarihi'] ?? '') . '|' . number_format((float)$row['tutar'], 2, '.', '');
+            if (isset($seen[$key])) {
+                $this->db->query(
+                    "UPDATE tahsilatlar SET deleted_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=?",
+                    [(int)$row['id'], $this->firmaId]
+                );
+                continue;
+            }
+            $seen[$key] = true;
+            $dedupedRows[] = $row;
+        }
+        $legacyRows = $dedupedRows;
+        if (!$legacyRows) {
+            return;
+        }
+
         $legacyPaid = 0.0;
         foreach ($legacyRows as $row) {
             $legacyPaid += (float)$row['tutar'];
+        }
+
+        if ($storedPaid <= 0 || $storedPaid >= $toplam) {
+            return;
         }
 
         $allowedLegacy = max(0.0, $storedPaid - $regularPaid);
