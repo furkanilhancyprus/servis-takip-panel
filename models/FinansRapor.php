@@ -201,8 +201,17 @@ class FinansRapor extends Model {
                 continue;
             }
             $extra['tahsilat'] = $remaining;
+            $extra['ciro'] = $remaining;
             $rows[] = $extra;
         }
+
+        foreach ($rows as &$row) {
+            $tahsilat = (float)($row['tahsilat'] ?? 0);
+            if ($tahsilat > 0) {
+                $row['ciro'] = $tahsilat;
+            }
+        }
+        unset($row);
 
         usort($rows, function ($a, $b) {
             $cmp = strcmp((string)$a['tarih'], (string)$b['tarih']);
