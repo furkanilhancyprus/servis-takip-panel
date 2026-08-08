@@ -828,26 +828,7 @@ class Database {
             }
         }
 
-        $this->execSql("
-            UPDATE taksitler
-            SET odenen_tutar=tutar
-            WHERE deleted_at IS NULL AND odendi=1 AND COALESCE(odenen_tutar,0)=0;
-
-            INSERT INTO tahsilatlar (firma_id, musteri_id, kaynak_tip, kaynak_id, taksit_id, tutar, odeme_yontemi, notlar, tahsilat_tarihi)
-            SELECT t.firma_id, t.musteri_id, 'satis', t.satis_id, t.id,
-                   COALESCE(NULLIF(t.odenen_tutar,0), t.tutar),
-                   COALESCE(t.odeme_yontemi, 'nakit'),
-                   'Eski taksit odemesi',
-                   COALESCE(t.odeme_tarihi, t.vade_tarihi, date('now'))
-            FROM taksitler t
-            WHERE t.deleted_at IS NULL
-              AND t.taksit_no > 0
-              AND t.odendi=1
-              AND NOT EXISTS (
-                  SELECT 1 FROM tahsilatlar th
-                  WHERE th.taksit_id=t.id AND th.deleted_at IS NULL
-              );
-        ");
+        $this->migrateLegacyTaksitTahsilatlari();
 
         $this->execSql("
             CREATE TABLE IF NOT EXISTS sync_queue (
@@ -921,6 +902,68 @@ class Database {
 
         $this->backfillBakimFromSales();
         $this->syncCihazKatalogu();
+    }
+
+    private function getAyar(string $anahtar, int $firmaId = 0): ?string {
+        $value = $this->fetchColumn(
+            "SELECT deger FROM ayarlar WHERE firma_id=? AND anahtar=? LIMIT 1",
+            [$firmaId, $anahtar]
+        );
+        return $value === false ? null : (string)$value;
+    }
+
+    private function setAyar(string $anahtar, string $deger, int $firmaId = 0): void {
+        $exists = $this->fetchColumn(
+            "SELECT id FROM ayarlar WHERE firma_id=? AND anahtar=? LIMIT 1",
+            [$firmaId, $anahtar]
+        );
+        if ($exists) {
+            $this->query(
+                "UPDATE ayarlar SET deger=?, synced_at=NULL WHERE id=?",
+                [$deger, $exists]
+            );
+            return;
+        }
+        $this->query(
+            "INSERT INTO ayarlar (firma_id, anahtar, deger) VALUES (?,?,?)",
+            [$firmaId, $anahtar, $deger]
+        );
+    }
+
+    private function migrateLegacyTaksitTahsilatlari(): void {
+        $marker = 'legacy_taksit_tahsilat_migrated';
+        if ($this->getAyar($marker, 0) === '1') {
+            return;
+        }
+
+        $existingSalePayments = (int)$this->fetchColumn(
+            "SELECT COUNT(*) FROM tahsilatlar WHERE kaynak_tip='satis' AND deleted_at IS NULL"
+        );
+
+        if ($existingSalePayments === 0) {
+            $this->execSql("
+                UPDATE taksitler
+                SET odenen_tutar=tutar
+                WHERE deleted_at IS NULL AND odendi=1 AND COALESCE(odenen_tutar,0)=0;
+
+                INSERT INTO tahsilatlar (firma_id, musteri_id, kaynak_tip, kaynak_id, taksit_id, tutar, odeme_yontemi, notlar, tahsilat_tarihi)
+                SELECT t.firma_id, t.musteri_id, 'satis', t.satis_id, t.id,
+                       COALESCE(NULLIF(t.odenen_tutar,0), t.tutar),
+                       COALESCE(t.odeme_yontemi, 'nakit'),
+                       'Eski taksit odemesi',
+                       COALESCE(t.odeme_tarihi, t.vade_tarihi, date('now'))
+                FROM taksitler t
+                WHERE t.deleted_at IS NULL
+                  AND t.taksit_no > 0
+                  AND t.odendi=1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM tahsilatlar th
+                      WHERE th.taksit_id=t.id AND th.deleted_at IS NULL
+                  );
+            ");
+        }
+
+        $this->setAyar($marker, '1', 0);
     }
 
     private function backfillBakimFromSales(): void {

@@ -185,6 +185,8 @@ class Taksit extends Model {
     }
 
     public function updateSatisOdeme(int $satisId): void {
+        $this->cleanupLegacyTahsilatlar($satisId);
+
         $pesinat = (float)$this->db->fetchColumn(
             "SELECT COALESCE(SUM(tutar),0) FROM taksitler WHERE satis_id=? AND firma_id=? AND taksit_no=0 AND odendi=1 AND deleted_at IS NULL",
             [$satisId, $this->firmaId]
@@ -206,6 +208,64 @@ class Taksit extends Model {
             "UPDATE satislar SET odenen_tutar=?, odeme_durumu=?, synced_at=NULL WHERE id=? AND firma_id=?",
             [$odenen, $durum, $satisId, $this->firmaId]
         );
+    }
+
+    private function cleanupLegacyTahsilatlar(int $satisId): void {
+        $satis = $this->db->fetchOne(
+            "SELECT toplam_tutar, odenen_tutar FROM satislar WHERE id=? AND firma_id=? AND deleted_at IS NULL",
+            [$satisId, $this->firmaId]
+        );
+        if (!$satis) {
+            return;
+        }
+
+        $toplam = (float)($satis['toplam_tutar'] ?? 0);
+        $storedPaid = (float)($satis['odenen_tutar'] ?? 0);
+        if ($toplam <= 0 || $storedPaid <= 0 || $storedPaid >= $toplam) {
+            return;
+        }
+
+        $regularPaid = (float)$this->db->fetchColumn(
+            "SELECT COALESCE(SUM(tutar),0)
+             FROM tahsilatlar
+             WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? AND deleted_at IS NULL
+               AND COALESCE(notlar,'') <> 'Eski taksit odemesi'",
+            [$satisId, $this->firmaId]
+        );
+
+        $legacyRows = $this->db->fetchAll(
+            "SELECT id, tutar
+             FROM tahsilatlar
+             WHERE kaynak_tip='satis' AND kaynak_id=? AND firma_id=? AND deleted_at IS NULL
+               AND COALESCE(notlar,'') = 'Eski taksit odemesi'
+             ORDER BY DATE(tahsilat_tarihi) ASC, id ASC",
+            [$satisId, $this->firmaId]
+        );
+        if (!$legacyRows) {
+            return;
+        }
+
+        $legacyPaid = 0.0;
+        foreach ($legacyRows as $row) {
+            $legacyPaid += (float)$row['tutar'];
+        }
+
+        $allowedLegacy = max(0.0, $storedPaid - $regularPaid);
+        if (($regularPaid + $legacyPaid) <= ($storedPaid + 0.01)) {
+            return;
+        }
+
+        $running = 0.0;
+        foreach ($legacyRows as $row) {
+            $running += (float)$row['tutar'];
+            if ($running <= ($allowedLegacy + 0.01)) {
+                continue;
+            }
+            $this->db->query(
+                "UPDATE tahsilatlar SET deleted_at=CURRENT_TIMESTAMP, synced_at=NULL WHERE id=? AND firma_id=?",
+                [(int)$row['id'], $this->firmaId]
+            );
+        }
     }
 
     private function rebuildTaksitOdemeleri(int $satisId): void {
