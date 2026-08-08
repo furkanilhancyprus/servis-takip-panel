@@ -932,7 +932,8 @@ class Database {
 
     private function migrateLegacyTaksitTahsilatlari(): void {
         $marker = 'legacy_taksit_tahsilat_migrated';
-        if ($this->getAyar($marker, 0) === '1') {
+        $markerFirmaId = (int)($this->fetchColumn("SELECT id FROM kullanicilar ORDER BY id ASC LIMIT 1") ?: 0);
+        if ($markerFirmaId > 0 && $this->getAyar($marker, $markerFirmaId) === '1') {
             return;
         }
 
@@ -963,7 +964,9 @@ class Database {
             ");
         }
 
-        $this->setAyar($marker, '1', 0);
+        if ($markerFirmaId > 0) {
+            $this->setAyar($marker, '1', $markerFirmaId);
+        }
     }
 
     private function backfillBakimFromSales(): void {

@@ -605,6 +605,67 @@ switch ($tip) {
         $bitis = $_GET['bitis'] ?? date('Y-m-t');
         $usdKur = max(0, (float)($_GET['usd_try'] ?? 0));
 
+        require_once ROOT . '/models/FinansRapor.php';
+        $rapor = (new FinansRapor())->getDetay($baslangic, $bitis, $usdKur);
+        $satisRows = $rapor['satislar'];
+        $servisRows = $rapor['servisler'];
+        $totals = $rapor['toplamlar'];
+
+        $data = [];
+        $data[] = ['SATISLAR', '', '', '', '', '', '', '', '', '', '', ''];
+        foreach ($satisRows as $r) {
+            $ciro = (float)$r['ciro'];
+            $maliyet = (float)$r['maliyet'];
+            $tahsilat = (float)$r['tahsilat'];
+            $data[] = [
+                'Satis',
+                $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
+                $r['no'],
+                $r['musteri_adi'],
+                $r['telefon'],
+                $r['aciklama'],
+                $r['tip'],
+                round($ciro, 2),
+                round($maliyet, 2),
+                round($ciro - $maliyet, 2),
+                round($tahsilat, 2),
+                $r['notlar'] ?: '-',
+            ];
+        }
+
+        $data[] = ['', '', '', '', '', '', 'SATIS TOPLAMI', round($totals['satis_ciro'], 2), round($totals['satis_maliyet'], 2), round($totals['satis_kar'], 2), round($totals['satis_tahsilat'], 2), ''];
+        $data[] = ['', '', '', '', '', '', '', '', '', '', '', ''];
+        $data[] = ['SERVISLER', '', '', '', '', '', '', '', '', '', '', ''];
+        foreach ($servisRows as $r) {
+            $ciro = (float)$r['ciro'];
+            $maliyet = (float)$r['maliyet'];
+            $tahsilat = (float)$r['tahsilat'];
+            $data[] = [
+                'Servis',
+                $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
+                $r['no'],
+                $r['musteri_adi'],
+                $r['telefon'],
+                $r['aciklama'],
+                $r['tip'],
+                round($ciro, 2),
+                round($maliyet, 2),
+                round($ciro - $maliyet, 2),
+                round($tahsilat, 2),
+                $r['notlar'] ?: '-',
+            ];
+        }
+
+        $data[] = ['', '', '', '', '', '', 'SERVIS TOPLAMI', round($totals['servis_ciro'], 2), round($totals['servis_maliyet'], 2), round($totals['servis_kar'], 2), round($totals['servis_tahsilat'], 2), ''];
+        $data[] = ['', '', '', '', '', '', 'GENEL TOPLAM', round($totals['toplam_ciro'], 2), round($totals['toplam_maliyet'], 2), round($totals['toplam_kar'], 2), round($totals['toplam_tahsilat'], 2), 'USD kuru: ' . $usdKur];
+
+        xlsxResponse(
+            ['Bolum', 'Tarih', 'Kayit No', 'Musteri', 'Telefon', 'Islem / Urun', 'Tip / Odeme', 'Ciro (TL)', 'Maliyet (TL)', 'Net Kar (TL)', 'Tahsilat (TL)', 'Notlar'],
+            $data,
+            "finans_raporu_$tarih.xlsx",
+            'Finans'
+        );
+
         $satisRows = [];
         $pesinSatislar = $db->fetchAll("
             SELECT
