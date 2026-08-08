@@ -111,7 +111,7 @@ include __DIR__ . '/layout/header.php';
                 <thead>
                     <tr>
                         <th>Tarih</th>
-                        <th>Kayıt</th>
+                        <th>Sıra</th>
                         <th>Müşteri</th>
                         <th>İşlem / Ürün</th>
                         <th>Tip</th>
@@ -129,7 +129,7 @@ include __DIR__ . '/layout/header.php';
                 <?php foreach ($rows as $row): ?>
                     <tr>
                         <td><?= htmlspecialchars($dateFmt($row['tarih'])) ?></td>
-                        <td>#<?= (int)$row['no'] ?></td>
+                        <td><?= (int)($row['sira_no'] ?? 0) ?></td>
                         <td>
                             <div class="font-medium text-slate-800"><?= htmlspecialchars($row['musteri_adi']) ?></div>
                             <div class="text-xs text-slate-400"><?= htmlspecialchars($row['telefon']) ?></div>

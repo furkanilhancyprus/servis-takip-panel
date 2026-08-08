@@ -620,7 +620,7 @@ switch ($tip) {
             $data[] = [
                 'Satis',
                 $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
-                $r['no'],
+                $r['sira_no'] ?? '',
                 $r['musteri_adi'],
                 $r['telefon'],
                 $r['aciklama'],
@@ -643,7 +643,7 @@ switch ($tip) {
             $data[] = [
                 'Servis',
                 $r['tarih'] ? date('d.m.Y', strtotime($r['tarih'])) : '-',
-                $r['no'],
+                $r['sira_no'] ?? '',
                 $r['musteri_adi'],
                 $r['telefon'],
                 $r['aciklama'],
@@ -660,7 +660,7 @@ switch ($tip) {
         $data[] = ['', '', '', '', '', '', 'GENEL TOPLAM', round($totals['toplam_ciro'], 2), round($totals['toplam_maliyet'], 2), round($totals['toplam_kar'], 2), round($totals['toplam_tahsilat'], 2), 'USD kuru: ' . $usdKur];
 
         xlsxResponse(
-            ['Bolum', 'Tarih', 'Kayit No', 'Musteri', 'Telefon', 'Islem / Urun', 'Tip / Odeme', 'Ciro (TL)', 'Maliyet (TL)', 'Net Kar (TL)', 'Tahsilat (TL)', 'Notlar'],
+            ['Bolum', 'Tarih', 'Sira', 'Musteri', 'Telefon', 'Islem / Urun', 'Tip / Odeme', 'Ciro (TL)', 'Maliyet (TL)', 'Net Kar (TL)', 'Tahsilat (TL)', 'Notlar'],
             $data,
             "finans_raporu_$tarih.xlsx",
             'Finans'

@@ -11,8 +11,10 @@ class FinansRapor extends Model {
             $cmp = strcmp((string)$a['tarih'], (string)$b['tarih']);
             return $cmp !== 0 ? $cmp : ((int)$a['no'] <=> (int)$b['no']);
         });
+        $satisRows = $this->addMonthlySequence($satisRows);
 
         $servisRows = $this->getServisler($baslangic, $bitis, $usdKur);
+        $servisRows = $this->addMonthlySequence($servisRows);
         $totals = [
             'satis_ciro' => 0.0, 'satis_maliyet' => 0.0, 'satis_tahsilat' => 0.0,
             'servis_ciro' => 0.0, 'servis_maliyet' => 0.0, 'servis_tahsilat' => 0.0,
@@ -306,6 +308,7 @@ class FinansRapor extends Model {
         $maliyet = (float)($r['maliyet'] ?? 0);
         return [
             'tarih' => $r['tarih'] ?? null,
+            'sira_no' => (int)($r['sira_no'] ?? 0),
             'no' => (int)($r['no'] ?? 0),
             'musteri_adi' => $r['musteri_adi'] ?? '-',
             'telefon' => $r['telefon'] ?? '-',
@@ -317,5 +320,16 @@ class FinansRapor extends Model {
             'tahsilat' => (float)($r['tahsilat'] ?? 0),
             'notlar' => $r['notlar'] ?? '',
         ];
+    }
+
+    private function addMonthlySequence(array $rows): array {
+        $counters = [];
+        foreach ($rows as &$row) {
+            $month = !empty($row['tarih']) ? date('Y-m', strtotime((string)$row['tarih'])) : '0000-00';
+            $counters[$month] = ($counters[$month] ?? 0) + 1;
+            $row['sira_no'] = $counters[$month];
+        }
+        unset($row);
+        return $rows;
     }
 }
