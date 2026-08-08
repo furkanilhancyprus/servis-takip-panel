@@ -263,10 +263,15 @@ class Tedarikci extends Model {
         $pdo = $this->db->getConnection();
         $pdo->beginTransaction();
         try {
+            $stokDusSql = $this->db->isMysql()
+                ? "UPDATE parcalar
+                   SET stok_miktari=GREATEST(0, stok_miktari-?), updated_at=CURRENT_TIMESTAMP, synced_at=NULL
+                   WHERE id=? AND firma_id=? AND deleted_at IS NULL"
+                : "UPDATE parcalar
+                   SET stok_miktari=MAX(0, stok_miktari-?), updated_at=CURRENT_TIMESTAMP, synced_at=NULL
+                   WHERE id=? AND firma_id=? AND deleted_at IS NULL";
             $stokDus = $pdo->prepare("
-                UPDATE parcalar
-                SET stok_miktari=MAX(0, stok_miktari-?), updated_at=CURRENT_TIMESTAMP, synced_at=NULL
-                WHERE id=? AND firma_id=? AND deleted_at IS NULL
+                {$stokDusSql}
             ");
             foreach ($alim['kalemler'] as $kalem) {
                 $stokDus->execute([(int)$kalem['miktar'], (int)$kalem['parca_id'], $this->firmaId]);
